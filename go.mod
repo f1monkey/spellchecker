@@ -1,4 +1,4 @@
-module github.com/cyradin/spellchecker
+module github.com/cyradin/spellchecker-ngram
 
 go 1.19
 
