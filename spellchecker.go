@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"io"
 	"sync"
+
+	"github.com/cyradin/spellchecker-ngram/dictionary"
 )
 
 // OptionFunc option setter
@@ -12,13 +14,13 @@ type OptionFunc func(m *Spellchecker) error
 type Spellchecker struct {
 	mtx sync.RWMutex
 
-	dict     *dictionary
+	dict     *dictionary.Dictionary
 	splitter bufio.SplitFunc
 }
 
 func New(opts ...OptionFunc) (*Spellchecker, error) {
 	result := &Spellchecker{
-		dict: newDictionary(),
+		dict: dictionary.New(),
 	}
 	for _, o := range opts {
 		if err := o(result); err != nil {
@@ -59,23 +61,13 @@ func (m *Spellchecker) Add(words ...string) {
 	defer m.mtx.Unlock()
 
 	for _, word := range words {
-		if id := m.dict.id(word); id > 0 {
-			m.dict.inc(id)
+		if id := m.dict.ID(word); id > 0 {
+			m.dict.Inc(id)
 			continue
 		}
 
-		m.dict.add(word, makeTerms(word))
+		m.dict.Add(word)
 	}
-}
-
-// IsCorrect check if provided word is in the dictionary
-func (s *Spellchecker) IsCorrect(word string) bool {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-
-	id := s.dict.id(word)
-
-	return id > 0
 }
 
 // WithOpt set spellchecker options

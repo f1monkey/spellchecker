@@ -1,4 +1,4 @@
-package spellchecker
+package dictionary
 
 import (
 	"fmt"
@@ -21,7 +21,6 @@ func makeTerms(word string) []Term {
 	}
 
 	result := make([]Term, 0)
-
 	for n := 1; n <= maxN; n++ {
 		for i, ngram := range makeNGrams(word, n) {
 			result = append(result, Term{

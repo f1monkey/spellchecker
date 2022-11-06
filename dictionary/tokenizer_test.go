@@ -1,4 +1,4 @@
-package spellchecker
+package dictionary
 
 import (
 	"testing"

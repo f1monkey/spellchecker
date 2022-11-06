@@ -10,4 +10,3 @@ __debug_bin
 *.txt
 *.bin
 !/data/*.txt
-!sample.txt
