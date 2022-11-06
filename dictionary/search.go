@@ -17,7 +17,7 @@ func (d *Dictionary) Find(word string, n int) []Hit {
 	// @todo calculate scores and return top hits
 	result := make([]Hit, 0, m.GetCardinality())
 	m.Iterate(func(x uint32) bool {
-		doc, ok := d.Docs[x]
+		doc, ok := d.docs[x]
 		if !ok {
 			return true
 		}
@@ -35,7 +35,7 @@ func (d *Dictionary) Find(word string, n int) []Hit {
 func (d *Dictionary) match(terms []Term) *roaring.Bitmap {
 	result := roaring.New()
 	for _, t := range terms {
-		m := d.Index[t.Value]
+		m := d.index[t.Value]
 		if m == nil {
 			continue
 		}

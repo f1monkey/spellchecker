@@ -1,6 +1,11 @@
 package dictionary
 
 import (
+	"bytes"
+	"encoding"
+	"encoding/gob"
+	"sync"
+
 	"github.com/RoaringBitmap/roaring"
 )
 
@@ -8,47 +13,61 @@ type Doc struct {
 	Value string
 }
 
-type Dictionary struct {
-	NextID uint32
-	IDs    map[string]uint32
-	Docs   map[uint32]Doc
+var _ encoding.BinaryMarshaler = (*Dictionary)(nil)
+var _ encoding.BinaryUnmarshaler = (*Dictionary)(nil)
 
-	Counts map[uint32]int
-	Index  map[string]*roaring.Bitmap
+type Dictionary struct {
+	mtx sync.RWMutex
+
+	nextID uint32
+	ids    map[string]uint32
+	docs   map[uint32]Doc
+
+	counts map[uint32]int
+	index  map[string]*roaring.Bitmap
 }
 
 func New() *Dictionary {
 	return &Dictionary{
-		NextID: 1,
-		IDs:    make(map[string]uint32),
-		Docs:   make(map[uint32]Doc),
-		Counts: make(map[uint32]int),
-		Index:  make(map[string]*roaring.Bitmap),
+		nextID: 1,
+		ids:    make(map[string]uint32),
+		docs:   make(map[uint32]Doc),
+		counts: make(map[uint32]int),
+		index:  make(map[string]*roaring.Bitmap),
 	}
 }
 
 // ID Get ID of the word. Returns 0 if not found
 func (d *Dictionary) ID(word string) uint32 {
-	return d.IDs[word]
+	d.mtx.RLock()
+	defer d.mtx.RUnlock()
+
+	return d.ids[word]
 }
 
 // Has Check if word is present in the dictionary
 func (d *Dictionary) Has(word string) bool {
-	return d.IDs[word] > 0
+	d.mtx.RLock()
+	defer d.mtx.RUnlock()
+
+	return d.ids[word] > 0
 }
 
 // Add Puts new word to the dictionary
 func (d *Dictionary) Add(word string) uint32 {
-	id := d.NextID
-	d.IDs[word] = id
-	d.Counts[id] = 1
-	d.NextID++
+	d.mtx.Lock()
+	defer d.mtx.Unlock()
+
+	id := d.nextID
+	d.ids[word] = id
+	d.counts[id] = 1
+	d.nextID++
 
 	for _, t := range makeTerms(word) {
-		m := d.Index[t.Value]
+		m := d.index[t.Value]
 		if m == nil {
 			m = roaring.New()
-			d.Index[t.Value] = m
+			d.index[t.Value] = m
 		}
 		m.Add(id)
 	}
@@ -58,5 +77,57 @@ func (d *Dictionary) Add(word string) uint32 {
 
 // Inc Increase word occurence counter
 func (d *Dictionary) Inc(id uint32) {
-	d.Counts[id]++
+	d.mtx.Lock()
+	defer d.mtx.Unlock()
+
+	d.counts[id]++
+}
+
+type dictData struct {
+	NextID uint32
+	IDs    map[string]uint32
+	Docs   map[uint32]Doc
+
+	Counts map[uint32]int
+	Index  map[string]*roaring.Bitmap
+}
+
+func (d *Dictionary) MarshalBinary() ([]byte, error) {
+	d.mtx.Lock()
+	defer d.mtx.Unlock()
+
+	data := &dictData{
+		NextID: d.nextID,
+		IDs:    d.ids,
+		Docs:   d.docs,
+		Counts: d.counts,
+		Index:  d.index,
+	}
+
+	buf := &bytes.Buffer{}
+	err := gob.NewEncoder(buf).Encode(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (d *Dictionary) UnmarshalBinary(data []byte) error {
+	d.mtx.Lock()
+	defer d.mtx.Unlock()
+
+	dictData := &dictData{}
+	err := gob.NewDecoder(bytes.NewBuffer(data)).Decode(dictData)
+	if err != nil {
+		return err
+	}
+
+	d.nextID = dictData.NextID
+	d.ids = dictData.IDs
+	d.docs = dictData.Docs
+	d.counts = dictData.Counts
+	d.index = dictData.Index
+
+	return nil
 }

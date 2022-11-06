@@ -6,6 +6,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func Benchmark_match(b *testing.B) {
+	dict := New()
+	dict.Add("orange")
+	dict.Add("range")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		dict.match([]Term{{Value: "ran"}})
+	}
+}
+
 func Test_match(t *testing.T) {
 	dict := New()
 	dict.Add("orange")
