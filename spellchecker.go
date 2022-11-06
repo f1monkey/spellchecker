@@ -9,26 +9,17 @@ import (
 // OptionFunc option setter
 type OptionFunc func(m *Spellchecker) error
 
-// Dictionary word storage
-type Dictionary interface {
-	// ID get word id. If the word does not present in the dictionary,
-	// must return id=0 and no error.
-	// Does not have to be safe for concurrent use.
-	ID(word string) (id uint32, err error)
-	// Add put new word to the dictionary.
-	// Does not have to be safe for concurrent use.
-	Add(word string) (id uint32, err error)
-}
-
 type Spellchecker struct {
 	mtx sync.RWMutex
 
-	dict     Dictionary
+	dict     *dictionary
 	splitter bufio.SplitFunc
 }
 
-func New(dict Dictionary, opts ...OptionFunc) (*Spellchecker, error) {
-	result := &Spellchecker{}
+func New(opts ...OptionFunc) (*Spellchecker, error) {
+	result := &Spellchecker{
+		dict: newDictionary(),
+	}
 	for _, o := range opts {
 		if err := o(result); err != nil {
 			return nil, err
@@ -48,7 +39,7 @@ func (m *Spellchecker) AddFrom(input io.Reader) error {
 		}
 
 		if i == len(words) {
-			m.Add(words)
+			m.Add(words...)
 			i = 0
 		}
 		words[i] = item.word
@@ -56,35 +47,35 @@ func (m *Spellchecker) AddFrom(input io.Reader) error {
 	}
 
 	if i > 0 {
-		m.Add(words[:i])
+		m.Add(words[:i]...)
 	}
 
 	return nil
 }
 
 // Add adds provided words to dictionary
-func (m *Spellchecker) Add(words []string) error {
+func (m *Spellchecker) Add(words ...string) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
 	for _, word := range words {
-		_, err := m.dict.Add(word)
-		if err != nil {
-			return err
+		if id := m.dict.id(word); id > 0 {
+			m.dict.inc(id)
+			continue
 		}
-	}
 
-	return nil
+		m.dict.add(word, makeTerms(word))
+	}
 }
 
 // IsCorrect check if provided word is in the dictionary
-func (s *Spellchecker) IsCorrect(word string) (bool, error) {
+func (s *Spellchecker) IsCorrect(word string) bool {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 
-	id, err := s.dict.ID(word)
+	id := s.dict.id(word)
 
-	return id > 0, err
+	return id > 0
 }
 
 // WithOpt set spellchecker options
@@ -101,7 +92,7 @@ func (s *Spellchecker) WithOpts(opts ...OptionFunc) error {
 	return nil
 }
 
-// WithSplitter set splitter func for AddFrom reader
+// WithSplitter set splitter func for AddFrom() reader
 func WithSplitter(f bufio.SplitFunc) OptionFunc {
 	return func(s *Spellchecker) error {
 		s.splitter = f
