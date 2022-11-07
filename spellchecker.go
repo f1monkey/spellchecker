@@ -5,7 +5,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/cyradin/spellchecker-ngram/dictionary"
+	dictionary "github.com/cyradin/spellchecker/dictionary"
 )
 
 // OptionFunc option setter

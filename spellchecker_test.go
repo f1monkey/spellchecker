@@ -89,12 +89,21 @@ func Benchmark_Spellchecker_IsCorrect(b *testing.B) {
 	}
 }
 
-func Benchmark_Spellchecker_Fix(b *testing.B) {
+func Benchmark_Spellchecker_Fix_3(b *testing.B) {
 	m := loadFullSpellchecker()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		m.Fix("tee")
+	}
+}
+
+func Benchmark_Spellchecker_Fix_6(b *testing.B) {
+	m := loadFullSpellchecker()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		m.Fix("oragne")
 	}
 }
 

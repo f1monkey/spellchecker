@@ -7,10 +7,14 @@ import (
 	"sync"
 
 	"github.com/RoaringBitmap/roaring"
+	"github.com/cyradin/spellchecker/ngram"
 )
+
+const MaxNGRam = 5
 
 type Doc struct {
 	Value string
+	Terms []ngram.NGram
 }
 
 var _ encoding.BinaryMarshaler = (*Dictionary)(nil)
@@ -53,6 +57,15 @@ func (d *Dictionary) Has(word string) bool {
 	return d.ids[word] > 0
 }
 
+// Doc get document by id
+func (d *Dictionary) Doc(id uint32) (Doc, bool) {
+	d.mtx.RLock()
+	defer d.mtx.RUnlock()
+
+	doc, ok := d.docs[id]
+	return doc, ok
+}
+
 // Add Puts new word to the dictionary
 func (d *Dictionary) Add(word string) uint32 {
 	d.mtx.Lock()
@@ -63,7 +76,10 @@ func (d *Dictionary) Add(word string) uint32 {
 	d.counts[id] = 1
 	d.nextID++
 
-	for _, t := range makeTerms(word) {
+	tt := ngram.MakeAll(word, MaxNGRam)
+	d.docs[id] = Doc{Value: word, Terms: tt}
+
+	for _, t := range tt {
 		m := d.index[t.Value]
 		if m == nil {
 			m = roaring.New()

@@ -4,7 +4,7 @@ import (
 	"encoding/gob"
 	"io"
 
-	"github.com/cyradin/spellchecker-ngram/dictionary"
+	"github.com/cyradin/spellchecker/dictionary"
 )
 
 type spellcheckerData struct {
