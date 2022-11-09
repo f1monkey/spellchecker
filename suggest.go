@@ -2,9 +2,6 @@ package spellchecker
 
 import (
 	"fmt"
-
-	"github.com/cyradin/spellchecker/dictionary"
-	"github.com/cyradin/spellchecker/ngram"
 )
 
 // MaxEditsAuto word length from 0 to 2: 0 edits; from 3 to 5: 1 edit; > 5: 2 edits
@@ -65,8 +62,7 @@ type Hit struct {
 
 // find returns top N hits by word
 func (s *Spellchecker) find(word string, n int) []Hit {
-	tt := ngram.Make(word, dictionary.MaxNGRam)
-	matches := s.dict.Match(tt)
+	matches, _ := s.dict.Match(word)
 	if matches.IsEmpty() {
 		return nil
 	}

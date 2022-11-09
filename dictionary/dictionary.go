@@ -7,18 +7,18 @@ import (
 	"sync"
 
 	"github.com/RoaringBitmap/roaring"
-	"github.com/cyradin/spellchecker/ngram"
+	"github.com/cyradin/ngrams"
 )
-
-const MaxNGRam = 5
 
 type Doc struct {
 	Value string
-	Terms []ngram.NGram
+	Terms []string
 }
 
 var _ encoding.BinaryMarshaler = (*Dictionary)(nil)
 var _ encoding.BinaryUnmarshaler = (*Dictionary)(nil)
+
+type Index map[string]*roaring.Bitmap
 
 type Dictionary struct {
 	mtx sync.RWMutex
@@ -27,17 +27,17 @@ type Dictionary struct {
 	ids    map[string]uint32
 	docs   map[uint32]Doc
 
-	counts map[uint32]int
-	index  map[string]*roaring.Bitmap
+	counts  map[uint32]int
+	indexes map[int]Index
 }
 
 func New() *Dictionary {
 	return &Dictionary{
-		nextID: 1,
-		ids:    make(map[string]uint32),
-		docs:   make(map[uint32]Doc),
-		counts: make(map[uint32]int),
-		index:  make(map[string]*roaring.Bitmap),
+		nextID:  1,
+		ids:     make(map[string]uint32),
+		docs:    make(map[uint32]Doc),
+		counts:  make(map[uint32]int),
+		indexes: make(map[int]Index),
 	}
 }
 
@@ -67,7 +67,7 @@ func (d *Dictionary) Doc(id uint32) (Doc, bool) {
 }
 
 // Add Puts new word to the dictionary
-func (d *Dictionary) Add(word string) uint32 {
+func (d *Dictionary) Add(word string) (uint32, error) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
@@ -76,19 +76,24 @@ func (d *Dictionary) Add(word string) uint32 {
 	d.counts[id] = 1
 	d.nextID++
 
-	tt := ngram.MakeAll(word, MaxNGRam)
+	tt, err := ngrams.From(word, 3)
+	if err != nil {
+		return 0, err
+	}
+
 	d.docs[id] = Doc{Value: word, Terms: tt}
 
+	index := d.getIndex(word)
 	for _, t := range tt {
-		m := d.index[t.Value]
+		m := index[t]
 		if m == nil {
 			m = roaring.New()
-			d.index[t.Value] = m
+			index[t] = m
 		}
 		m.Add(id)
 	}
 
-	return id
+	return id, nil
 }
 
 // Inc Increase word occurence counter
@@ -104,8 +109,8 @@ type dictData struct {
 	IDs    map[string]uint32
 	Docs   map[uint32]Doc
 
-	Counts map[uint32]int
-	Index  map[string]*roaring.Bitmap
+	Counts  map[uint32]int
+	Indexes map[int]Index
 }
 
 func (d *Dictionary) MarshalBinary() ([]byte, error) {
@@ -113,11 +118,11 @@ func (d *Dictionary) MarshalBinary() ([]byte, error) {
 	defer d.mtx.Unlock()
 
 	data := &dictData{
-		NextID: d.nextID,
-		IDs:    d.ids,
-		Docs:   d.docs,
-		Counts: d.counts,
-		Index:  d.index,
+		NextID:  d.nextID,
+		IDs:     d.ids,
+		Docs:    d.docs,
+		Counts:  d.counts,
+		Indexes: d.indexes,
 	}
 
 	buf := &bytes.Buffer{}
@@ -143,7 +148,18 @@ func (d *Dictionary) UnmarshalBinary(data []byte) error {
 	d.ids = dictData.IDs
 	d.docs = dictData.Docs
 	d.counts = dictData.Counts
-	d.index = dictData.Index
+	d.indexes = dictData.Indexes
 
 	return nil
+}
+
+func (d *Dictionary) getIndex(word string) Index {
+	wordLen := len([]rune(word))
+	index, ok := d.indexes[wordLen]
+	if !ok {
+		index = make(Index)
+		d.indexes[wordLen] = index
+	}
+
+	return index
 }

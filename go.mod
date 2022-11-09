@@ -4,7 +4,8 @@ go 1.19
 
 require (
 	github.com/RoaringBitmap/roaring v1.2.1
-	github.com/stretchr/testify v1.8.0
+	github.com/cyradin/ngrams v1.0.0
+	github.com/stretchr/testify v1.8.1
 )
 
 require (
