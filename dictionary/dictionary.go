@@ -10,6 +10,8 @@ import (
 	"github.com/cyradin/ngrams"
 )
 
+const ngramSize = 3
+
 type Doc struct {
 	Value string
 	Terms []string
@@ -62,8 +64,7 @@ func (d *Dictionary) Doc(id uint32) (Doc, bool) {
 	d.mtx.RLock()
 	defer d.mtx.RUnlock()
 
-	doc, ok := d.docs[id]
-	return doc, ok
+	return d.docRaw(id)
 }
 
 // Add Puts new word to the dictionary
@@ -76,7 +77,7 @@ func (d *Dictionary) Add(word string) (uint32, error) {
 	d.counts[id] = 1
 	d.nextID++
 
-	tt, err := ngrams.From(word, 3)
+	tt, err := ngrams.From(word, ngramSize)
 	if err != nil {
 		return 0, err
 	}
@@ -154,7 +155,11 @@ func (d *Dictionary) UnmarshalBinary(data []byte) error {
 }
 
 func (d *Dictionary) getIndex(word string) Index {
-	wordLen := len([]rune(word))
+	return d.getIndexByLen(len([]rune(word)))
+
+}
+
+func (d *Dictionary) getIndexByLen(wordLen int) Index {
 	index, ok := d.indexes[wordLen]
 	if !ok {
 		index = make(Index)
@@ -162,4 +167,9 @@ func (d *Dictionary) getIndex(word string) Index {
 	}
 
 	return index
+}
+
+func (d *Dictionary) docRaw(id uint32) (Doc, bool) {
+	doc, ok := d.docs[id]
+	return doc, ok
 }

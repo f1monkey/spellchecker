@@ -25,7 +25,7 @@ func (s *Spellchecker) Fix(word string) (string, error) {
 		return word, nil
 	}
 
-	hits := s.find(word, 1)
+	hits := s.dict.Find(word, 1, 2)
 	if len(hits) == 0 {
 		return word, fmt.Errorf("%w: %s", ErrUnknownWord, word)
 	}
@@ -42,7 +42,7 @@ func (s *Spellchecker) Suggest(word string, n int) ([]string, error) {
 		return []string{word}, nil
 	}
 
-	hits := s.find(word, 1)
+	hits := s.dict.Find(word, n, 2)
 	if len(hits) == 0 {
 		return []string{word}, fmt.Errorf("%w: %s", ErrUnknownWord, word)
 	}
@@ -53,35 +53,4 @@ func (s *Spellchecker) Suggest(word string, n int) ([]string, error) {
 	}
 
 	return result, nil
-}
-
-type Hit struct {
-	Value string
-	Score float64
-}
-
-// find returns top N hits by word
-func (s *Spellchecker) find(word string, n int) []Hit {
-	matches, _ := s.dict.Match(word)
-	if matches.IsEmpty() {
-		return nil
-	}
-
-	// @todo calculate scores and return top hits
-	result := make([]Hit, 0, 20)
-
-	matches.Iterate(func(x uint32) bool {
-		doc, ok := s.dict.Doc(x)
-		if !ok {
-			return true
-		}
-
-		result = append(result, Hit{
-			Value: doc.Value,
-		})
-
-		return true
-	})
-
-	return result
 }
