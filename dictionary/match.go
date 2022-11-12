@@ -69,8 +69,8 @@ func (d *Dictionary) Find(word string, n int, maxErrors int) []Match {
 
 func (d *Dictionary) match(ngrm []string, wordLen int) *roaring.Bitmap {
 	result := roaring.New()
-	index := d.getIndexByLen(wordLen)
-	for _, ng := range ngrm {
+	for i, ng := range ngrm {
+		index := d.getIndex(wordLen, i)
 		m := index[ng]
 		if m == nil {
 			continue

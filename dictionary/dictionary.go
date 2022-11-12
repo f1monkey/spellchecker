@@ -21,6 +21,8 @@ var _ encoding.BinaryMarshaler = (*Dictionary)(nil)
 var _ encoding.BinaryUnmarshaler = (*Dictionary)(nil)
 
 type Index map[string]*roaring.Bitmap
+type IndexByPos map[int]Index
+type IndexByLen map[int]IndexByPos
 
 type Dictionary struct {
 	mtx sync.RWMutex
@@ -30,7 +32,7 @@ type Dictionary struct {
 	docs   map[uint32]Doc
 
 	counts  map[uint32]int
-	indexes map[int]Index
+	indexes IndexByLen
 }
 
 func New() *Dictionary {
@@ -39,7 +41,7 @@ func New() *Dictionary {
 		ids:     make(map[string]uint32),
 		docs:    make(map[uint32]Doc),
 		counts:  make(map[uint32]int),
-		indexes: make(map[int]Index),
+		indexes: make(IndexByLen),
 	}
 }
 
@@ -77,19 +79,20 @@ func (d *Dictionary) Add(word string) (uint32, error) {
 	d.counts[id] = 1
 	d.nextID++
 
-	tt, err := ngrams.From(word, ngramSize)
+	ngrm, err := ngrams.From(word, ngramSize)
 	if err != nil {
 		return 0, err
 	}
 
-	d.docs[id] = Doc{Value: word, Terms: tt}
+	wordLen := len([]rune(word))
+	d.docs[id] = Doc{Value: word, Terms: ngrm}
 
-	index := d.getIndex(word)
-	for _, t := range tt {
-		m := index[t]
+	for i, ng := range ngrm {
+		index := d.getIndex(wordLen, i)
+		m := index[ng]
 		if m == nil {
 			m = roaring.New()
-			index[t] = m
+			index[ng] = m
 		}
 		m.Add(id)
 	}
@@ -111,7 +114,7 @@ type dictData struct {
 	Docs   map[uint32]Doc
 
 	Counts  map[uint32]int
-	Indexes map[int]Index
+	Indexes IndexByLen
 }
 
 func (d *Dictionary) MarshalBinary() ([]byte, error) {
@@ -154,16 +157,17 @@ func (d *Dictionary) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-func (d *Dictionary) getIndex(word string) Index {
-	return d.getIndexByLen(len([]rune(word)))
+func (d *Dictionary) getIndex(wordLen int, pos int) Index {
+	indexByPos, ok := d.indexes[wordLen]
+	if !ok {
+		indexByPos = make(IndexByPos)
+		d.indexes[wordLen] = indexByPos
+	}
 
-}
-
-func (d *Dictionary) getIndexByLen(wordLen int) Index {
-	index, ok := d.indexes[wordLen]
+	index, ok := indexByPos[pos]
 	if !ok {
 		index = make(Index)
-		d.indexes[wordLen] = index
+		indexByPos[pos] = index
 	}
 
 	return index

@@ -30,8 +30,8 @@ func Test_Dictionary_Add(t *testing.T) {
 		require.Equal(t, 1, dict.counts[id])
 		require.Equal(t, 1, len(dict.ids))
 		require.Equal(t, uint32(2), dict.nextID)
-		require.Equal(t, uint64(1), dict.indexes[3]["qwe"].GetCardinality())
-		require.Nil(t, dict.indexes[3]["asd"])
+		require.Equal(t, uint64(1), dict.indexes[3][0]["qwe"].GetCardinality())
+		require.Nil(t, dict.indexes[3][0]["asd"])
 
 		id, err = dict.Add("asd")
 		require.NoError(t, err)
@@ -39,8 +39,8 @@ func Test_Dictionary_Add(t *testing.T) {
 		require.Equal(t, 1, dict.counts[id])
 		require.Equal(t, 2, len(dict.ids))
 		require.Equal(t, uint32(3), dict.nextID)
-		require.Equal(t, uint64(1), dict.indexes[3]["qwe"].GetCardinality())
-		require.Equal(t, uint64(1), dict.indexes[3]["asd"].GetCardinality())
+		require.Equal(t, uint64(1), dict.indexes[3][0]["qwe"].GetCardinality())
+		require.Equal(t, uint64(1), dict.indexes[3][0]["asd"].GetCardinality())
 	})
 }
 
