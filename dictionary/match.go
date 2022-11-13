@@ -21,56 +21,82 @@ func (d *Dictionary) Find(word string, n int, maxErrors int) []Match {
 	if len(ngrms) == 0 {
 		return nil
 	}
-
-	ngrmMap := make(map[string]struct{})
-	for _, ng := range ngrms {
-		ngrmMap[ng] = struct{}{}
-	}
-
-	var result []Match
-
 	wordLen := len([]rune(word))
-	m := d.match(ngrms, wordLen)
 
-	docs := make([]string, 0)
+	return d.matchAll(ngrms, wordLen, maxErrors, n)
+}
 
-	m.Iterate(func(id uint32) bool {
-		doc, ok := d.docRaw(id)
-		if !ok {
-			return true
+type matchOpts struct {
+	realLength  int
+	matchLength int
+	ngrm        []string
+	offset      int
+	maxErrors   int
+}
+
+func (d *Dictionary) matchAll(ngrms []string, wordLen int, maxErrors int, maxCnt int) []Match {
+	result := make([]Match, 0, maxCnt*10)
+
+	// match with different lengths
+	for l := wordLen - maxErrors; l <= wordLen+maxErrors; l++ {
+		lengthErrs := abs(wordLen - maxErrors)
+
+		ngrmMap := make(map[string]struct{})
+		for _, ng := range ngrms {
+			ngrmMap[ng] = struct{}{}
 		}
-		docs = append(docs, doc.Value)
-		matches := 0
-		for _, t := range doc.Terms {
-			if _, ok := ngrmMap[t]; ok {
-				matches++
+
+		for offset := -1 * lengthErrs; offset <= lengthErrs; offset++ {
+			allowedErrs := abs(offset) - lengthErrs
+
+			m := d.match(ngrms, l, offset)
+			if m.IsEmpty() {
+				continue
 			}
-		}
 
-		errCnt := abs(wordLen - matches - ngramSize + 1)
-		if errCnt <= maxErrors {
-			result = append(result, Match{
-				Value: doc.Value,
-				Score: 1 / float64(errCnt) * math.Log1p(float64(d.counts[id])), // @todo
+			m.Iterate(func(id uint32) bool {
+				doc, ok := d.docRaw(id)
+				if !ok {
+					return true
+				}
+				matches := 0
+				for _, t := range doc.Terms {
+					if _, ok := ngrmMap[t]; ok {
+						matches++
+					}
+				}
+
+				errCnt := abs(wordLen - matches - ngramSize + 1)
+				if errCnt <= allowedErrs {
+					result = append(result, Match{
+						Value: doc.Value,
+						Score: 1 / float64(errCnt) * math.Log1p(float64(d.counts[id])), // @todo
+					})
+				}
+
+				return true
 			})
 		}
-
-		return true
-	})
+	}
 
 	sort.Slice(result, func(i, j int) bool { return result[i].Score > result[j].Score })
 
-	if len(result) < n {
+	if len(result) < maxCnt {
 		return result
 	}
 
-	return result[0:n]
+	return result[0:maxCnt]
 }
 
-func (d *Dictionary) match(ngrm []string, wordLen int) *roaring.Bitmap {
+func (d *Dictionary) match(ngrm []string, wordLen int, offset int) *roaring.Bitmap {
 	result := roaring.New()
 	for i, ng := range ngrm {
-		index := d.getIndex(wordLen, i)
+		pos := i + offset
+		if pos < 0 {
+			continue
+		}
+
+		index := d.getIndex(wordLen, pos)
 		m := index[ng]
 		if m == nil {
 			continue
