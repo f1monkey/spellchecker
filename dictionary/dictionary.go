@@ -5,44 +5,45 @@ import (
 	"encoding"
 	"encoding/gob"
 	"sync"
-
-	"github.com/RoaringBitmap/roaring"
-	"github.com/cyradin/ngrams"
 )
 
 const ngramSize = 3
 
 type Doc struct {
-	Value string
-	Terms []string
+	Word  string
+	Count int
 }
 
 var _ encoding.BinaryMarshaler = (*Dictionary)(nil)
 var _ encoding.BinaryUnmarshaler = (*Dictionary)(nil)
 
-type Index map[string]*roaring.Bitmap
-type IndexByPos map[int]Index
-type IndexByLen map[int]IndexByPos
+type IndexByLen map[int]Index
+type Index map[uint64][]uint32
 
 type Dictionary struct {
 	mtx sync.RWMutex
 
-	nextID uint32
-	ids    map[string]uint32
-	docs   map[uint32]Doc
+	alphabet alphabet
+	nextID   uint32
+	ids      map[string]uint32
+	docs     map[uint32]Doc
 
-	counts  map[uint32]int
 	indexes IndexByLen
 }
 
-func New() *Dictionary {
-	return &Dictionary{
-		nextID:  1,
-		ids:     make(map[string]uint32),
-		docs:    make(map[uint32]Doc),
-		counts:  make(map[uint32]int),
-		indexes: make(IndexByLen),
+func New(ab string) (*Dictionary, error) {
+	alphabet, err := newAlphabet(ab)
+	if err != nil {
+		return nil, err
 	}
+
+	return &Dictionary{
+		alphabet: alphabet,
+		nextID:   1,
+		ids:      make(map[string]uint32),
+		docs:     make(map[uint32]Doc),
+		indexes:  make(IndexByLen),
+	}, nil
 }
 
 // ID Get ID of the word. Returns 0 if not found
@@ -76,26 +77,14 @@ func (d *Dictionary) Add(word string) (uint32, error) {
 
 	id := d.nextID
 	d.ids[word] = id
-	d.counts[id] = 1
 	d.nextID++
 
-	ngrm, err := ngrams.From(word, ngramSize)
-	if err != nil {
-		return 0, err
-	}
-
-	wordLen := len([]rune(word))
-	d.docs[id] = Doc{Value: word, Terms: ngrm}
-
-	for i, ng := range ngrm {
-		index := d.getIndex(wordLen, i)
-		m := index[ng]
-		if m == nil {
-			m = roaring.New()
-			index[ng] = m
-		}
-		m.Add(id)
-	}
+	runes := []rune(word)
+	wordLen := len(runes)
+	d.docs[id] = Doc{Word: word, Count: 1}
+	index := d.getIndex(wordLen)
+	m := d.alphabet.encode(runes)
+	index[m] = append(index[m], id)
 
 	return id, nil
 }
@@ -105,13 +94,19 @@ func (d *Dictionary) Inc(id uint32) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
-	d.counts[id]++
+	doc, ok := d.docRaw(id)
+	if !ok {
+		return
+	}
+	doc.Count++
+	d.docs[id] = doc
 }
 
 type dictData struct {
-	NextID uint32
-	IDs    map[string]uint32
-	Docs   map[uint32]Doc
+	Alphabet alphabet
+	NextID   uint32
+	IDs      map[string]uint32
+	Docs     map[uint32]Doc
 
 	Counts  map[uint32]int
 	Indexes IndexByLen
@@ -122,11 +117,11 @@ func (d *Dictionary) MarshalBinary() ([]byte, error) {
 	defer d.mtx.Unlock()
 
 	data := &dictData{
-		NextID:  d.nextID,
-		IDs:     d.ids,
-		Docs:    d.docs,
-		Counts:  d.counts,
-		Indexes: d.indexes,
+		Alphabet: d.alphabet,
+		NextID:   d.nextID,
+		IDs:      d.ids,
+		Docs:     d.docs,
+		Indexes:  d.indexes,
 	}
 
 	buf := &bytes.Buffer{}
@@ -148,26 +143,20 @@ func (d *Dictionary) UnmarshalBinary(data []byte) error {
 		return err
 	}
 
+	d.alphabet = dictData.Alphabet
 	d.nextID = dictData.NextID
 	d.ids = dictData.IDs
 	d.docs = dictData.Docs
-	d.counts = dictData.Counts
 	d.indexes = dictData.Indexes
 
 	return nil
 }
 
-func (d *Dictionary) getIndex(wordLen int, pos int) Index {
-	indexByPos, ok := d.indexes[wordLen]
-	if !ok {
-		indexByPos = make(IndexByPos)
-		d.indexes[wordLen] = indexByPos
-	}
-
-	index, ok := indexByPos[pos]
+func (d *Dictionary) getIndex(wordLen int) Index {
+	index, ok := d.indexes[wordLen]
 	if !ok {
 		index = make(Index)
-		indexByPos[pos] = index
+		d.indexes[wordLen] = index
 	}
 
 	return index
