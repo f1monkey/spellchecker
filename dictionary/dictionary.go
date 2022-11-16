@@ -17,9 +17,6 @@ type Doc struct {
 var _ encoding.BinaryMarshaler = (*Dictionary)(nil)
 var _ encoding.BinaryUnmarshaler = (*Dictionary)(nil)
 
-type IndexByLen map[int]Index
-type Index map[uint64][]uint32
-
 type Dictionary struct {
 	mtx sync.RWMutex
 

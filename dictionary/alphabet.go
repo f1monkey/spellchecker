@@ -24,14 +24,23 @@ func newAlphabet(str string) (alphabet, error) {
 	return result, nil
 }
 
-func (a alphabet) encode(word []rune) uint64 {
-	var result uint64
-
+func (a alphabet) encode(word []rune) bitmap {
+	var b bitmap
 	for _, letter := range word {
 		if index, ok := a[letter]; ok {
-			result |= (1 << index)
+			b.or(index)
 		}
 	}
 
+	return b
+}
+
+func (a alphabet) orAll(b bitmap) []bitmap {
+	result := make([]bitmap, len(a))
+	for _, index := range a {
+		bc := b.clone()
+		bc.or(uint32(index))
+		result[index] = bc
+	}
 	return result
 }

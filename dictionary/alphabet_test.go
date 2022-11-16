@@ -27,10 +27,30 @@ func Test_newAlphabet(t *testing.T) {
 }
 
 func Test_alphabet_encode(t *testing.T) {
-	ab, err := newAlphabet(DefaultAlphabet)
+	ab, err := newAlphabet("abcd")
 	require.NoError(t, err)
 
-	word := []rune("word")
+	word := []rune("aab")
 	result := ab.encode(word)
-	require.Equal(t, uint64(4341768), result)
+	require.Equal(t, bitmap(3), result)
+}
+
+func Benchmark_alphabet_orAll(b *testing.B) {
+	ab, err := newAlphabet(DefaultAlphabet)
+	require.NoError(b, err)
+
+	for i := 0; i < b.N; i++ {
+		ab.orAll(bitmap(0))
+	}
+}
+
+func Test_alphabet_orAll(t *testing.T) {
+	ab, err := newAlphabet("abcd")
+	require.NoError(t, err)
+
+	var b bitmap
+	b.or(1)
+
+	result := ab.orAll(b)
+	require.Equal(t, []bitmap{3, 2, 6, 10}, result)
 }

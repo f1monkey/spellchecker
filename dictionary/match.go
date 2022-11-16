@@ -1,5 +1,9 @@
 package dictionary
 
+import (
+	"sort"
+)
+
 type Match struct {
 	Value string
 	Score float64
@@ -9,93 +13,43 @@ func (d *Dictionary) Find(word string, n int, maxErrors int) []Match {
 	d.mtx.RLock()
 	defer d.mtx.RUnlock()
 
-	return nil // @todo
+	runes := []rune(word)
+	bm := d.alphabet.encode(runes)
+
+	return d.matchAll(bm, len(runes), maxErrors, n)
+
 }
 
-// type matchOpts struct {
-// 	realLength  int
-// 	matchLength int
-// 	ngrm        []string
-// 	offset      int
-// 	maxErrors   int
-// }
+func (d *Dictionary) matchAll(bm bitmap, wordLen int, maxErrors int, maxCnt int) []Match {
+	result := make([]Match, 0, maxCnt*10)
 
-// func (d *Dictionary) matchAll(ngrms []string, wordLen int, maxErrors int, maxCnt int) []Match {
-// 	result := make([]Match, 0, maxCnt*10)
+	// exact match
+	ids := d.getIndex(wordLen).get(bm)
+	for _, id := range ids {
+		doc, ok := d.docRaw(id)
+		if !ok {
+			continue
+		}
 
-// 	// match with different lengths
-// 	for l := wordLen - maxErrors; l <= wordLen+maxErrors; l++ {
-// 		lengthErrs := abs(wordLen - maxErrors)
+		result = append(result, Match{
+			Value: doc.Word,
+			Score: 0.0,
+		})
+	}
 
-// 		ngrmMap := make(map[string]struct{})
-// 		for _, ng := range ngrms {
-// 			ngrmMap[ng] = struct{}{}
-// 		}
+	for l := wordLen - maxErrors; l <= wordLen+maxErrors; l++ {
+		if l <= 0 {
+			continue
+		}
 
-// 		for offset := -1 * lengthErrs; offset <= lengthErrs; offset++ {
-// 			allowedErrs := abs(offset) - lengthErrs
+		// @todo
+	}
 
-// 			m := d.match(ngrms, l, offset)
-// 			if m.IsEmpty() {
-// 				continue
-// 			}
+	sort.Slice(result, func(i, j int) bool { return result[i].Score > result[j].Score })
 
-// 			m.Iterate(func(id uint32) bool {
-// 				doc, ok := d.docRaw(id)
-// 				if !ok {
-// 					return true
-// 				}
-// 				matches := 0
-// 				for _, t := range doc.Terms {
-// 					if _, ok := ngrmMap[t]; ok {
-// 						matches++
-// 					}
-// 				}
+	if len(result) < maxCnt {
+		return result
+	}
 
-// 				errCnt := abs(wordLen - matches - ngramSize + 1)
-// 				if errCnt <= allowedErrs {
-// 					result = append(result, Match{
-// 						Value: doc.Word,
-// 						Score: 1 / float64(errCnt) * math.Log1p(float64(d.counts[id])), // @todo
-// 					})
-// 				}
-
-// 				return true
-// 			})
-// 		}
-// 	}
-
-// 	sort.Slice(result, func(i, j int) bool { return result[i].Score > result[j].Score })
-
-// 	if len(result) < maxCnt {
-// 		return result
-// 	}
-
-// 	return result[0:maxCnt]
-// }
-
-// func (d *Dictionary) match(ngrm []string, wordLen int, offset int) *roaring.Bitmap {
-// 	result := roaring.New()
-// 	for i, ng := range ngrm {
-// 		pos := i + offset
-// 		if pos < 0 {
-// 			continue
-// 		}
-
-// 		index := d.getIndex(wordLen, pos)
-// 		m := index[ng]
-// 		if m == nil {
-// 			continue
-// 		}
-// 		result.Or(m)
-// 	}
-
-// 	return result
-// }
-
-// func abs(x int) int {
-// 	if x < 0 {
-// 		return -1 * x
-// 	}
-// 	return x
-// }
+	return result[0:maxCnt]
+}
