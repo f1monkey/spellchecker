@@ -4,8 +4,7 @@ import (
 	"math"
 	"sort"
 
-	"github.com/RoaringBitmap/roaring"
-	"github.com/cyradin/ngrams"
+	"github.com/agnivade/levenshtein"
 )
 
 type Match struct {
@@ -17,94 +16,106 @@ func (d *Dictionary) Find(word string, n int, maxErrors int) []Match {
 	d.mtx.RLock()
 	defer d.mtx.RUnlock()
 
-	ngrms, _ := ngrams.From(word, ngramSize)
-	if len(ngrms) == 0 {
+	if maxErrors <= 0 {
 		return nil
 	}
-	wordLen := len([]rune(word))
 
-	return d.matchAll(ngrms, wordLen, maxErrors, n)
-}
+	bm := d.alphabet.encode([]rune(word))
+	result := make([]Match, 0, n*10)
 
-type matchOpts struct {
-	realLength  int
-	matchLength int
-	ngrm        []string
-	offset      int
-	maxErrors   int
-}
-
-func (d *Dictionary) matchAll(ngrms []string, wordLen int, maxErrors int, maxCnt int) []Match {
-	result := make([]Match, 0, maxCnt*10)
-
-	// match with different lengths
-	for l := wordLen - maxErrors; l <= wordLen+maxErrors; l++ {
-		lengthErrs := abs(wordLen - maxErrors)
-
-		ngrmMap := make(map[string]struct{})
-		for _, ng := range ngrms {
-			ngrmMap[ng] = struct{}{}
+	// exact match
+	ids := d.index.get(bm)
+	for _, id := range ids {
+		doc, ok := d.docRaw(id)
+		if !ok {
+			continue
 		}
 
-		for offset := -1 * lengthErrs; offset <= lengthErrs; offset++ {
-			allowedErrs := abs(offset) - lengthErrs
-
-			m := d.match(ngrms, l, offset)
-			if m.IsEmpty() {
-				continue
-			}
-
-			m.Iterate(func(id uint32) bool {
-				doc, ok := d.docRaw(id)
-				if !ok {
-					return true
-				}
-				matches := 0
-				for _, t := range doc.Terms {
-					if _, ok := ngrmMap[t]; ok {
-						matches++
-					}
-				}
-
-				errCnt := abs(wordLen - matches - ngramSize + 1)
-				if errCnt <= allowedErrs {
-					result = append(result, Match{
-						Value: doc.Value,
-						Score: 1 / float64(errCnt) * math.Log1p(float64(d.counts[id])), // @todo
-					})
-				}
-
-				return true
+		if score := d.calcScore(word, doc.Word, 0, maxErrors, doc.Count); score != 0 {
+			result = append(result, Match{
+				Value: doc.Word,
+				Score: score,
 			})
 		}
 	}
 
+	result = append(result, d.getFixes(word, bm, 1, maxErrors, make(map[bitmap]struct{}))...)
+
 	sort.Slice(result, func(i, j int) bool { return result[i].Score > result[j].Score })
 
-	if len(result) < maxCnt {
+	if len(result) < n {
 		return result
 	}
 
-	return result[0:maxCnt]
+	return result[0:n]
 }
 
-func (d *Dictionary) match(ngrm []string, wordLen int, offset int) *roaring.Bitmap {
-	result := roaring.New()
-	for i, ng := range ngrm {
-		pos := i + offset
-		if pos < 0 {
+func (d *Dictionary) getFixes(word string, bm bitmap, errCnt int, maxErrors int, checked map[bitmap]struct{}) []Match {
+	if errCnt > maxErrors {
+		return nil
+	}
+
+	result := make([]Match, 0, len(d.alphabet))
+	for i := 0; i < len(d.alphabet); i++ {
+		bm := bm.clone()
+		bm.xor(uint32(i))
+
+		if _, ok := checked[bm]; ok {
+			continue
+		}
+		checked[bm] = struct{}{}
+
+		ids := d.index[bm]
+		if len(ids) == 0 {
 			continue
 		}
 
-		index := d.getIndex(wordLen, pos)
-		m := index[ng]
-		if m == nil {
-			continue
+		for _, id := range ids {
+			doc, ok := d.docRaw(id)
+			if !ok {
+				continue
+			}
+
+			if score := d.calcScore(word, doc.Word, 0, maxErrors, doc.Count); score != 0 {
+				result = append(result, Match{
+					Value: doc.Word,
+					Score: score,
+				})
+			}
 		}
-		result.Or(m)
+
+		result = append(result, d.getFixes(word, bm, errCnt+1, maxErrors, checked)...)
 	}
 
 	return result
+}
+
+func (d *Dictionary) calcScore(searchWord string, word string, errCnt int, maxErrors int, count int) float64 {
+	searchRunes := []rune(searchWord)
+	wordRunes := []rune(word)
+	allowedErrs := maxErrors - errCnt - abs(len(wordRunes)-len(searchRunes))
+	if allowedErrs < 0 {
+		return 0.0
+	}
+
+	if allowedErrs == 0 && searchWord != word {
+		return 0.0
+	}
+
+	mult := 1 / (1 + float64(errCnt*errCnt)) * math.Log1p(float64(count))
+
+	// if first letters are the same, increase score
+	if searchRunes[0] == wordRunes[0] {
+		mult *= 1.5
+		// if first letters are the same, increase score
+		if len(searchRunes) > 1 && len(wordRunes) > 1 && searchRunes[1] == wordRunes[1] {
+			mult *= 1.5
+		}
+	}
+
+	distance := levenshtein.ComputeDistance(searchWord, word)
+
+	return 1 / (1 + float64(distance*distance)) * mult
 }
 
 func abs(x int) int {
