@@ -34,13 +34,3 @@ func (a alphabet) encode(word []rune) bitmap {
 
 	return b
 }
-
-func (a alphabet) orAll(b bitmap) []bitmap {
-	result := make([]bitmap, len(a))
-	for _, index := range a {
-		bc := b.clone()
-		bc.or(uint32(index))
-		result[index] = bc
-	}
-	return result
-}

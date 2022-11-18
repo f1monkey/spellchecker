@@ -13,43 +13,104 @@ func (d *Dictionary) Find(word string, n int, maxErrors int) []Match {
 	d.mtx.RLock()
 	defer d.mtx.RUnlock()
 
-	runes := []rune(word)
-	bm := d.alphabet.encode(runes)
+	if maxErrors <= 0 {
+		return nil
+	}
 
-	return d.matchAll(bm, len(runes), maxErrors, n)
-
-}
-
-func (d *Dictionary) matchAll(bm bitmap, wordLen int, maxErrors int, maxCnt int) []Match {
-	result := make([]Match, 0, maxCnt*10)
+	bm := d.alphabet.encode([]rune(word))
+	result := make([]Match, 0, n*10)
 
 	// exact match
-	ids := d.getIndex(wordLen).get(bm)
+	ids := d.index.get(bm)
 	for _, id := range ids {
 		doc, ok := d.docRaw(id)
 		if !ok {
 			continue
 		}
 
-		result = append(result, Match{
-			Value: doc.Word,
-			Score: 0.0,
-		})
-	}
-
-	for l := wordLen - maxErrors; l <= wordLen+maxErrors; l++ {
-		if l <= 0 {
+		if !d.isValidWord(word, doc.Word, 0, maxErrors) {
 			continue
 		}
 
-		// @todo
+		result = append(result, Match{
+			Value: doc.Word,
+			Score: 0.0, // @todo calc score
+		})
 	}
+
+	result = append(result, d.getFixes(word, bm, 1, maxErrors, make(map[bitmap]struct{}))...)
 
 	sort.Slice(result, func(i, j int) bool { return result[i].Score > result[j].Score })
 
-	if len(result) < maxCnt {
+	if len(result) < n {
 		return result
 	}
 
-	return result[0:maxCnt]
+	return result[0:n]
+}
+
+func (d *Dictionary) getFixes(word string, bm bitmap, errCnt int, maxErrors int, checked map[bitmap]struct{}) []Match {
+	if errCnt > maxErrors {
+		return nil
+	}
+
+	result := make([]Match, 0, len(d.alphabet))
+	for i := 0; i < len(d.alphabet); i++ {
+		bm := bm.clone()
+		bm.xor(uint32(i))
+
+		if _, ok := checked[bm]; ok {
+			continue
+		}
+		checked[bm] = struct{}{}
+
+		ids := d.index[bm]
+		if len(ids) == 0 {
+			continue
+		}
+
+		for _, id := range ids {
+			doc, ok := d.docRaw(id)
+			if !ok {
+				continue
+			}
+
+			if !d.isValidWord(word, doc.Word, errCnt, maxErrors) {
+				continue
+			}
+
+			result = append(result, Match{
+				Value: doc.Word,
+				Score: 0.0, // @todo calc score
+			})
+		}
+
+		result = append(result, d.getFixes(word, bm, errCnt+1, maxErrors, checked)...)
+	}
+
+	return result
+}
+
+func (d *Dictionary) isValidWord(searchWord string, word string, errCnt int, maxErrors int) bool {
+	searchRunes := []rune(searchWord)
+	wordRunes := []rune(word)
+	allowedErrs := maxErrors - errCnt - abs(len(wordRunes)-len(searchRunes))
+	if allowedErrs < 0 {
+		return false
+	}
+
+	if allowedErrs == 0 && searchWord != word {
+		return false
+	}
+
+	// @todo levenshtein distance
+
+	return true
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -1 * x
+	}
+	return x
 }

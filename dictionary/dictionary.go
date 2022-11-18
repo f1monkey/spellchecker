@@ -25,7 +25,7 @@ type Dictionary struct {
 	ids      map[string]uint32
 	docs     map[uint32]Doc
 
-	indexes IndexByLen
+	index Index
 }
 
 func New(ab string) (*Dictionary, error) {
@@ -39,7 +39,7 @@ func New(ab string) (*Dictionary, error) {
 		nextID:   1,
 		ids:      make(map[string]uint32),
 		docs:     make(map[uint32]Doc),
-		indexes:  make(IndexByLen),
+		index:    make(Index),
 	}, nil
 }
 
@@ -77,11 +77,9 @@ func (d *Dictionary) Add(word string) (uint32, error) {
 	d.nextID++
 
 	runes := []rune(word)
-	wordLen := len(runes)
 	d.docs[id] = Doc{Word: word, Count: 1}
-	index := d.getIndex(wordLen)
 	m := d.alphabet.encode(runes)
-	index[m] = append(index[m], id)
+	d.index[m] = append(d.index[m], id)
 
 	return id, nil
 }
@@ -105,8 +103,8 @@ type dictData struct {
 	IDs      map[string]uint32
 	Docs     map[uint32]Doc
 
-	Counts  map[uint32]int
-	Indexes IndexByLen
+	Counts map[uint32]int
+	Index  Index
 }
 
 func (d *Dictionary) MarshalBinary() ([]byte, error) {
@@ -118,7 +116,7 @@ func (d *Dictionary) MarshalBinary() ([]byte, error) {
 		NextID:   d.nextID,
 		IDs:      d.ids,
 		Docs:     d.docs,
-		Indexes:  d.indexes,
+		Index:    d.index,
 	}
 
 	buf := &bytes.Buffer{}
@@ -144,19 +142,9 @@ func (d *Dictionary) UnmarshalBinary(data []byte) error {
 	d.nextID = dictData.NextID
 	d.ids = dictData.IDs
 	d.docs = dictData.Docs
-	d.indexes = dictData.Indexes
+	d.index = dictData.Index
 
 	return nil
-}
-
-func (d *Dictionary) getIndex(wordLen int) Index {
-	index, ok := d.indexes[wordLen]
-	if !ok {
-		index = make(Index)
-		d.indexes[wordLen] = index
-	}
-
-	return index
 }
 
 func (d *Dictionary) docRaw(id uint32) (Doc, bool) {
