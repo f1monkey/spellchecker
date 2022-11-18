@@ -33,7 +33,7 @@ func Test_Dictionary_Add(t *testing.T) {
 		require.Equal(t, 1, dict.docs[id].Count)
 		require.Equal(t, 1, len(dict.ids))
 		require.Equal(t, uint32(2), dict.nextID)
-		require.Len(t, dict.index[3], 1)
+		require.Len(t, dict.index, 1)
 
 		id, err = dict.Add("asd")
 		require.NoError(t, err)
@@ -41,7 +41,7 @@ func Test_Dictionary_Add(t *testing.T) {
 		require.Equal(t, 1, dict.docs[id].Count)
 		require.Equal(t, 2, len(dict.ids))
 		require.Equal(t, uint32(3), dict.nextID)
-		require.Len(t, dict.index[3], 2)
+		require.Len(t, dict.index, 2)
 	})
 }
 
