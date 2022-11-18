@@ -1,7 +1,10 @@
 package dictionary
 
 import (
+	"math"
 	"sort"
+
+	"github.com/agnivade/levenshtein"
 )
 
 type Match struct {
@@ -28,14 +31,12 @@ func (d *Dictionary) Find(word string, n int, maxErrors int) []Match {
 			continue
 		}
 
-		if !d.isValidWord(word, doc.Word, 0, maxErrors) {
-			continue
+		if score := d.calcScore(word, doc.Word, 0, maxErrors, doc.Count); score != 0 {
+			result = append(result, Match{
+				Value: doc.Word,
+				Score: score,
+			})
 		}
-
-		result = append(result, Match{
-			Value: doc.Word,
-			Score: 0.0, // @todo calc score
-		})
 	}
 
 	result = append(result, d.getFixes(word, bm, 1, maxErrors, make(map[bitmap]struct{}))...)
@@ -75,14 +76,12 @@ func (d *Dictionary) getFixes(word string, bm bitmap, errCnt int, maxErrors int,
 				continue
 			}
 
-			if !d.isValidWord(word, doc.Word, errCnt, maxErrors) {
-				continue
+			if score := d.calcScore(word, doc.Word, 0, maxErrors, doc.Count); score != 0 {
+				result = append(result, Match{
+					Value: doc.Word,
+					Score: score,
+				})
 			}
-
-			result = append(result, Match{
-				Value: doc.Word,
-				Score: 0.0, // @todo calc score
-			})
 		}
 
 		result = append(result, d.getFixes(word, bm, errCnt+1, maxErrors, checked)...)
@@ -91,21 +90,32 @@ func (d *Dictionary) getFixes(word string, bm bitmap, errCnt int, maxErrors int,
 	return result
 }
 
-func (d *Dictionary) isValidWord(searchWord string, word string, errCnt int, maxErrors int) bool {
+func (d *Dictionary) calcScore(searchWord string, word string, errCnt int, maxErrors int, count int) float64 {
 	searchRunes := []rune(searchWord)
 	wordRunes := []rune(word)
 	allowedErrs := maxErrors - errCnt - abs(len(wordRunes)-len(searchRunes))
 	if allowedErrs < 0 {
-		return false
+		return 0.0
 	}
 
 	if allowedErrs == 0 && searchWord != word {
-		return false
+		return 0.0
 	}
 
-	// @todo levenshtein distance
+	mult := 1 / (1 + float64(errCnt*errCnt)) * math.Log1p(float64(count))
 
-	return true
+	// if first letters are the same, increase score
+	if searchRunes[0] == wordRunes[0] {
+		mult *= 1.5
+		// if first letters are the same, increase score
+		if len(searchRunes) > 1 && len(wordRunes) > 1 && searchRunes[1] == wordRunes[1] {
+			mult *= 1.5
+		}
+	}
+
+	distance := levenshtein.ComputeDistance(searchWord, word)
+
+	return 1 / (1 + float64(distance*distance)) * mult
 }
 
 func abs(x int) int {

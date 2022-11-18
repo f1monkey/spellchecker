@@ -161,7 +161,7 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 					continue
 				}
 				result, err := m.Suggest(word, 10)
-				if err != nil {
+				if err != nil && !errors.Is(err, ErrUnknownWord) {
 					fmt.Println(err)
 				}
 
