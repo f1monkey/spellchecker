@@ -212,8 +212,15 @@ func Test_Spellchecker_WithOpts(t *testing.T) {
 }
 
 func Test_Spellchecker_IsCorrect(t *testing.T) {
-	m := newSampleSpellchecker()
+	s := newSampleSpellchecker()
 
-	assert.True(t, m.IsCorrect("orange"))
-	assert.False(t, m.IsCorrect("car"))
+	assert.True(t, s.IsCorrect("orange"))
+	assert.False(t, s.IsCorrect("car"))
+}
+
+func Test_Spellchecker_Fix(t *testing.T) {
+	s := newSampleSpellchecker()
+	result, err := s.Fix("problam")
+	require.NoError(t, err)
+	require.Equal(t, result, "problem")
 }

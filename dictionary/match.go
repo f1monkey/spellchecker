@@ -39,7 +39,8 @@ func (d *Dictionary) Find(word string, n int, maxErrors int) []Match {
 		}
 	}
 
-	result = append(result, d.getFixes(word, bm, 1, maxErrors, make(map[bitmap]struct{}))...)
+	checked := make(map[bitmap]struct{})
+	result = append(result, d.getFixes(word, bm, 1, maxErrors, checked)...)
 
 	sort.Slice(result, func(i, j int) bool { return result[i].Score > result[j].Score })
 
@@ -66,22 +67,21 @@ func (d *Dictionary) getFixes(word string, bm bitmap, errCnt int, maxErrors int,
 		checked[bm] = struct{}{}
 
 		ids := d.index[bm]
-		if len(ids) == 0 {
-			continue
-		}
+		if len(ids) != 0 {
+			for _, id := range ids {
+				doc, ok := d.docRaw(id)
+				if !ok {
+					continue
+				}
 
-		for _, id := range ids {
-			doc, ok := d.docRaw(id)
-			if !ok {
-				continue
+				if score := d.calcScore(word, doc.Word, 0, maxErrors, doc.Count); score != 0 {
+					result = append(result, Match{
+						Value: doc.Word,
+						Score: score,
+					})
+				}
 			}
 
-			if score := d.calcScore(word, doc.Word, 0, maxErrors, doc.Count); score != 0 {
-				result = append(result, Match{
-					Value: doc.Word,
-					Score: score,
-				})
-			}
 		}
 
 		result = append(result, d.getFixes(word, bm, errCnt+1, maxErrors, checked)...)
@@ -107,7 +107,7 @@ func (d *Dictionary) calcScore(searchWord string, word string, errCnt int, maxEr
 	// if first letters are the same, increase score
 	if searchRunes[0] == wordRunes[0] {
 		mult *= 1.5
-		// if first letters are the same, increase score
+		// if second letters are the same too, increase score even more
 		if len(searchRunes) > 1 && len(wordRunes) > 1 && searchRunes[1] == wordRunes[1] {
 			mult *= 1.5
 		}
