@@ -34,3 +34,7 @@ func (a alphabet) encode(word []rune) bitmap {
 
 	return b
 }
+
+func (a alphabet) len() int {
+	return len(a)
+}

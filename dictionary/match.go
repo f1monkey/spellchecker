@@ -20,9 +20,8 @@ func (d *Dictionary) Find(word string, n int, maxErrors int) []Match {
 		return nil
 	}
 
-	checked := make(map[bitmap]struct{})
 	bm := d.alphabet.encode([]rune(word))
-	candidates := d.getCandidates(word, bm, 1, maxErrors, checked)
+	candidates := d.getCandidates(word, bm, 1, maxErrors)
 	result := calcScores([]rune(word), candidates)
 
 	if len(result) < n {
@@ -38,9 +37,11 @@ type Candidate struct {
 	Count    int
 }
 
-func (d *Dictionary) getCandidates(word string, bmSrc bitmap, errCnt int, maxErrors int, checked map[bitmap]struct{}) []Candidate {
+func (d *Dictionary) getCandidates(word string, bmSrc bitmap, errCnt int, maxErrors int) []Candidate {
+	checked := make(map[bitmap]struct{}, d.alphabet.len()*2)
+
 	// exact match OR candidate has all the same letters as the word but in different order
-	result := make([]Candidate, 0, len(d.alphabet))
+	result := make([]Candidate, 0, 50)
 	if _, ok := checked[bmSrc]; !ok {
 		checked[bmSrc] = struct{}{}
 		ids := d.index.get(bmSrc)
@@ -62,31 +63,41 @@ func (d *Dictionary) getCandidates(word string, bmSrc bitmap, errCnt int, maxErr
 		}
 	}
 
-	return append(result, d.getCandidatesRecursive(word, bmSrc, 1, 2, checked)...)
-}
-
-func (d *Dictionary) getCandidatesRecursive(word string, bmSrc bitmap, errCnt int, maxErrors int, checked map[bitmap]struct{}) []Candidate {
-	if errCnt > maxErrors {
-		return nil
-	}
-
-	result := make([]Candidate, 0, len(d.alphabet))
 	for i := 0; i < len(d.alphabet); i++ {
 		bmCandidate := bmSrc.clone()
 		bmCandidate.xor(uint32(i))
-
 		if _, ok := checked[bmCandidate]; ok {
 			continue
 		}
 		checked[bmCandidate] = struct{}{}
 
-		diff := bmSrc.countDiff(bmCandidate)
-		if diff > maxErrors {
-			continue
+		ids := d.index.get(bmCandidate)
+		for _, id := range ids {
+			doc, ok := d.docRaw(id)
+			if !ok {
+				continue
+			}
+
+			distance := levenshtein.ComputeDistance(word, doc.Word)
+			if distance > maxErrors {
+				continue
+			}
+			result = append(result, Candidate{
+				Word:     doc.Word,
+				Count:    doc.Count,
+				Distance: distance,
+			})
 		}
 
-		ids := d.index[bmCandidate]
-		if len(ids) != 0 {
+		for j := 0; j < len(d.alphabet); j++ {
+			bmCandidate2 := bmCandidate.clone()
+			bmCandidate2.xor(uint32(j))
+			if _, ok := checked[bmCandidate2]; ok {
+				continue
+			}
+			checked[bmCandidate2] = struct{}{}
+
+			ids := d.index.get(bmCandidate2)
 			for _, id := range ids {
 				doc, ok := d.docRaw(id)
 				if !ok {
@@ -94,7 +105,7 @@ func (d *Dictionary) getCandidatesRecursive(word string, bmSrc bitmap, errCnt in
 				}
 
 				distance := levenshtein.ComputeDistance(word, doc.Word)
-				if distance+diff > maxErrors {
+				if distance > maxErrors {
 					continue
 				}
 				result = append(result, Candidate{
@@ -104,8 +115,6 @@ func (d *Dictionary) getCandidatesRecursive(word string, bmSrc bitmap, errCnt in
 				})
 			}
 		}
-
-		result = append(result, d.getCandidatesRecursive(word, bmCandidate, errCnt+1, maxErrors, checked)...)
 	}
 
 	return result
