@@ -62,6 +62,11 @@ func (d *Dictionary) getCandidates(word string, bmSrc bitmap, errCnt int, maxErr
 			})
 		}
 	}
+	// the most common mistake is a transposition of letters.
+	// so if we found one here, we do early termination
+	if len(result) != 0 {
+		return result
+	}
 
 	for i := 0; i < len(d.alphabet); i++ {
 		bmCandidate := bmSrc.clone()
