@@ -28,8 +28,19 @@ type Dictionary struct {
 	index Index
 }
 
-func New(ab string) (*Dictionary, error) {
-	alphabet, err := newAlphabet(ab)
+type AlphabetConfig struct {
+	// Letters to use in alphabet. Duplicates are not allowed
+	Letters string
+	// Length bit count to encode alphabet
+	// If it is less than rune count in letters then
+	// several letters will be encoded as one bit.
+	// It reduces database size for a bit
+	// but drastically reduces search performance in large dictionaries
+	Length int
+}
+
+func New(ab AlphabetConfig) (*Dictionary, error) {
+	alphabet, err := newAlphabet(ab.Letters, ab.Length)
 	if err != nil {
 		return nil, err
 	}
