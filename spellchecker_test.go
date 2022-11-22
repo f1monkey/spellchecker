@@ -130,6 +130,8 @@ type benchmarkNorvigItem struct {
 }
 
 func benchmarkNorvig(b *testing.B, dataPath string) {
+	b.StopTimer()
+	b.ResetTimer()
 	m := loadFullSpellchecker()
 
 	testData, err := os.Open(dataPath)
@@ -162,14 +164,16 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 	total := 0
 	ok := 0
 
-	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, item := range data {
 			for _, word := range item.words {
 				if word == "" {
 					continue
 				}
+
+				b.StartTimer()
 				result, err := m.Suggest(word, 10)
+				b.StopTimer()
 				if err != nil && !errors.Is(err, ErrUnknownWord) {
 					fmt.Println(err)
 				}
