@@ -42,7 +42,7 @@ func newFullSpellchecker() *Spellchecker {
 		panic(err)
 	}
 
-	s, err := New()
+	s, err := New(DefaultAlphabet)
 	if err != nil {
 		panic(err)
 	}
@@ -61,7 +61,7 @@ func newSampleSpellchecker() *Spellchecker {
 		panic(err)
 	}
 
-	s, err := New()
+	s, err := New(DefaultAlphabet)
 	if err != nil {
 		panic(err)
 	}
@@ -98,12 +98,21 @@ func Benchmark_Spellchecker_Fix_3(b *testing.B) {
 	}
 }
 
-func Benchmark_Spellchecker_Fix_6(b *testing.B) {
+func Benchmark_Spellchecker_Fix_6_Transposition(b *testing.B) {
 	m := loadFullSpellchecker()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		m.Fix("oragne")
+	}
+}
+
+func Benchmark_Spellchecker_Fix_6_Replacement(b *testing.B) {
+	m := loadFullSpellchecker()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		m.Fix("problam")
 	}
 }
 
@@ -121,6 +130,8 @@ type benchmarkNorvigItem struct {
 }
 
 func benchmarkNorvig(b *testing.B, dataPath string) {
+	b.StopTimer()
+	b.ResetTimer()
 	m := loadFullSpellchecker()
 
 	testData, err := os.Open(dataPath)
@@ -153,14 +164,16 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 	total := 0
 	ok := 0
 
-	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, item := range data {
 			for _, word := range item.words {
 				if word == "" {
 					continue
 				}
+
+				b.StartTimer()
 				result, err := m.Suggest(word, 10)
+				b.StopTimer()
 				if err != nil && !errors.Is(err, ErrUnknownWord) {
 					fmt.Println(err)
 				}
@@ -193,27 +206,41 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 
 func Test_NewSpellchecker(t *testing.T) {
 	t.Run("must be able to create a spellchecker without any options", func(t *testing.T) {
-		s, err := New()
+		s, err := New(DefaultAlphabet)
 		require.NoError(t, err)
 		require.NotNil(t, s.dict)
 	})
 	t.Run("must be able to create a spellchecker with custom splitter", func(t *testing.T) {
-		s, err := New(WithSplitter(bufio.ScanRunes))
+		s, err := New(DefaultAlphabet, WithSplitter(bufio.ScanRunes))
 		require.NoError(t, err)
 		require.NotNil(t, s.splitter)
 	})
 }
 
 func Test_Spellchecker_WithOpts(t *testing.T) {
-	s, err := New()
+	s, err := New(DefaultAlphabet)
 	require.NoError(t, err)
 	s.WithOpts(WithSplitter(bufio.ScanLines))
 	require.NotNil(t, s.splitter)
 }
 
 func Test_Spellchecker_IsCorrect(t *testing.T) {
-	m := newSampleSpellchecker()
+	s := newSampleSpellchecker()
 
-	assert.True(t, m.IsCorrect("orange"))
-	assert.False(t, m.IsCorrect("car"))
+	assert.True(t, s.IsCorrect("orange"))
+	assert.False(t, s.IsCorrect("car"))
+}
+
+func Test_Spellchecker_Fix(t *testing.T) {
+	s := newSampleSpellchecker()
+	result, err := s.Fix("problam")
+	require.NoError(t, err)
+	require.Equal(t, result, "problem")
+}
+
+func Test_Spellchecker_Suggest(t *testing.T) {
+	s := newSampleSpellchecker()
+	result, err := s.Suggest("rang", 5)
+	require.NoError(t, err)
+	require.Equal(t, result, []string{"range", "orange"})
 }

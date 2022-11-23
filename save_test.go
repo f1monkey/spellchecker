@@ -26,5 +26,5 @@ func Test_Spellchecker_Save(t *testing.T) {
 	m2, err := Load(file)
 	require.NoError(t, err)
 
-	assert.EqualValues(t, m1.dict.ID("green"), m2.dict.ID("green"))
+	assert.EqualValues(t, m1.dict.id("green"), m2.dict.id("green"))
 }
