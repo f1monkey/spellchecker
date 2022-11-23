@@ -1,10 +1,4 @@
-package dictionary
-
-type Index map[bitmap][]uint32
-
-func (i Index) get(b bitmap) []uint32 {
-	return i[b]
-}
+package spellchecker
 
 type bitmap int64
 

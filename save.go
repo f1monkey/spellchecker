@@ -3,12 +3,10 @@ package spellchecker
 import (
 	"encoding/gob"
 	"io"
-
-	"github.com/cyradin/spellchecker/dictionary"
 )
 
 type spellcheckerData struct {
-	Dict *dictionary.Dictionary
+	Dict *dictionary
 }
 
 // Save encodes spellchecker data and writes it to the provided writer

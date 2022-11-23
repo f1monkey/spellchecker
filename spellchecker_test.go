@@ -237,3 +237,10 @@ func Test_Spellchecker_Fix(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, result, "problem")
 }
+
+func Test_Spellchecker_Suggest(t *testing.T) {
+	s := newSampleSpellchecker()
+	result, err := s.Suggest("rang", 5)
+	require.NoError(t, err)
+	require.Equal(t, result, []string{"range", "orange"})
+}

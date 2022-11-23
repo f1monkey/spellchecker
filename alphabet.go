@@ -1,6 +1,17 @@
-package dictionary
+package spellchecker
 
 import "fmt"
+
+type AlphabetConfig struct {
+	// Letters to use in alphabet. Duplicates are not allowed
+	Letters string
+	// Length bit count to encode alphabet
+	// If it is less than rune count in letters then
+	// several letters will be encoded as one bit.
+	// It reduces database size for a bit
+	// but drastically reduces search performance in large dictionaries
+	Length int
+}
 
 var DefaultAlphabet = AlphabetConfig{
 	Letters: "abcdefghijklmnopqrstuvwxyz",
@@ -17,7 +28,7 @@ func newAlphabet(str string, length int) (alphabet, error) {
 	}
 
 	if length > 63 {
-		return nil, fmt.Errorf("alphabets longer than 63 are not supported yet")
+		return nil, fmt.Errorf("alphabets longer than 63 are not supported (yet?)")
 	}
 
 	result := make(alphabet)
