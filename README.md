@@ -13,7 +13,7 @@ Accuracy in [Peter Norvig's tests](http://norvig.com/spell-correct.html):
 ## Installation
 
 ```
-$ go get -v github.com/cyradin/spellchecker
+$ go get -v github.com/f1monkey/spellchecker
 ```
 
 ## Usage
