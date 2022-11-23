@@ -2,18 +2,18 @@ package spellchecker
 
 import "fmt"
 
-type AlphabetConfig struct {
+type Alphabet struct {
 	// Letters to use in alphabet. Duplicates are not allowed
 	Letters string
 	// Length bit count to encode alphabet
 	// If it is less than rune count in letters then
 	// several letters will be encoded as one bit.
-	// It reduces database size for a bit
+	// It decreases database size for a bit
 	// but drastically reduces search performance in large dictionaries
 	Length int
 }
 
-var DefaultAlphabet = AlphabetConfig{
+var DefaultAlphabet = Alphabet{
 	Letters: "abcdefghijklmnopqrstuvwxyz",
 	Length:  26,
 }

@@ -31,7 +31,7 @@ type dictionary struct {
 	index map[bitmap][]uint32
 }
 
-func newDictionary(ab AlphabetConfig) (*dictionary, error) {
+func newDictionary(ab Alphabet) (*dictionary, error) {
 	alphabet, err := newAlphabet(ab.Letters, ab.Length)
 	if err != nil {
 		return nil, err

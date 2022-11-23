@@ -42,7 +42,7 @@ func newFullSpellchecker() *Spellchecker {
 		panic(err)
 	}
 
-	s, err := New()
+	s, err := New(DefaultAlphabet)
 	if err != nil {
 		panic(err)
 	}
@@ -61,7 +61,7 @@ func newSampleSpellchecker() *Spellchecker {
 		panic(err)
 	}
 
-	s, err := New()
+	s, err := New(DefaultAlphabet)
 	if err != nil {
 		panic(err)
 	}
@@ -206,19 +206,19 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 
 func Test_NewSpellchecker(t *testing.T) {
 	t.Run("must be able to create a spellchecker without any options", func(t *testing.T) {
-		s, err := New()
+		s, err := New(DefaultAlphabet)
 		require.NoError(t, err)
 		require.NotNil(t, s.dict)
 	})
 	t.Run("must be able to create a spellchecker with custom splitter", func(t *testing.T) {
-		s, err := New(WithSplitter(bufio.ScanRunes))
+		s, err := New(DefaultAlphabet, WithSplitter(bufio.ScanRunes))
 		require.NoError(t, err)
 		require.NotNil(t, s.splitter)
 	})
 }
 
 func Test_Spellchecker_WithOpts(t *testing.T) {
-	s, err := New()
+	s, err := New(DefaultAlphabet)
 	require.NoError(t, err)
 	s.WithOpts(WithSplitter(bufio.ScanLines))
 	require.NotNil(t, s.splitter)

@@ -17,7 +17,7 @@ type Spellchecker struct {
 	splitter bufio.SplitFunc
 }
 
-func New(opts ...OptionFunc) (*Spellchecker, error) {
+func New(alphabet Alphabet, opts ...OptionFunc) (*Spellchecker, error) {
 	dict, err := newDictionary(DefaultAlphabet)
 	if err != nil {
 		return nil, err
