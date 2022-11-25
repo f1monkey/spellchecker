@@ -1,4 +1,4 @@
-module github.com/cyradin/spellchecker
+module github.com/f1monkey/spellchecker
 
 go 1.19
 
