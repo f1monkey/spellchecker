@@ -18,7 +18,7 @@ $ go get -v github.com/f1monkey/spellchecker
 
 ## Usage
 
-```
+```go
 func main() {
 	// Create new instance
 	sc, err := spellchecker.New(spellchecker.Alphabet{
