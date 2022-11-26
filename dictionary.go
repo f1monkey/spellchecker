@@ -62,14 +62,6 @@ func (d *dictionary) has(word string) bool {
 	return d.ids[word] > 0
 }
 
-// doc get document by id
-func (d *dictionary) doc(id uint32) (Doc, bool) {
-	d.mtx.RLock()
-	defer d.mtx.RUnlock()
-	doc, ok := d.docs[id]
-	return doc, ok
-}
-
 // add Puts new word to the dictionary
 func (d *dictionary) add(word string) (uint32, error) {
 	d.mtx.Lock()
@@ -135,9 +127,34 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap, errCnt int) []сan
 
 	// "exact match" OR "candidate has all the same letters as the word but in different order"
 	result := make([]сandidate, 0, 50)
-	if _, ok := checked[bmSrc]; !ok {
-		checked[bmSrc] = struct{}{}
-		ids := d.index[bmSrc]
+
+	checked[bmSrc] = struct{}{}
+	ids := d.index[bmSrc]
+	for _, id := range ids {
+		doc, ok := d.docs[id]
+		if !ok {
+			continue
+		}
+
+		distance := levenshtein.ComputeDistance(word, doc.Word)
+		if distance > maxErrors {
+			continue
+		}
+		result = append(result, сandidate{
+			Word:     doc.Word,
+			Count:    doc.Count,
+			Distance: distance,
+		})
+	}
+	// the most common mistake is a transposition of letters.
+	// so if we found one here, we do early termination
+	if len(result) != 0 {
+		return result
+	}
+
+	// @todo perform phonetic analysis with early termination here
+	for bm := range d.computeCandidateBitmaps(word, bmSrc) {
+		ids := d.index[bm]
 		for _, id := range ids {
 			doc, ok := d.docs[id]
 			if !ok {
@@ -155,51 +172,39 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap, errCnt int) []сan
 			})
 		}
 	}
-	// the most common mistake is a transposition of letters.
-	// so if we found one here, we do early termination
-	if len(result) != 0 {
-		return result
-	}
-
-	// @todo perform phonetic analysis with early termination here
-
-	// @todo try to use tree index here
-	toCheck := []bitmap{bmSrc}
-	for errCnt := 1; errCnt <= maxErrors; errCnt++ {
-		toCheck2 := make([]bitmap, 0, d.alphabet.len())
-		for _, bm := range toCheck {
-			for i := 0; i < len(d.alphabet); i++ {
-				bmCandidate := bm.clone()
-				bmCandidate.xor(uint32(i))
-				if _, ok := checked[bmCandidate]; ok {
-					continue
-				}
-				checked[bmCandidate] = struct{}{}
-				toCheck2 = append(toCheck2, bmCandidate)
-
-				ids := d.index[bmCandidate]
-				for _, id := range ids {
-					doc, ok := d.docs[id]
-					if !ok {
-						continue
-					}
-
-					distance := levenshtein.ComputeDistance(word, doc.Word)
-					if distance > maxErrors {
-						continue
-					}
-					result = append(result, сandidate{
-						Word:     doc.Word,
-						Count:    doc.Count,
-						Distance: distance,
-					})
-				}
-			}
-		}
-		toCheck = toCheck2
-	}
 
 	return result
+}
+
+func (d *dictionary) computeCandidateBitmaps(word string, bmSrc bitmap) map[bitmap]struct{} {
+	bitmaps := make(map[bitmap]struct{}, d.alphabet.len()*5)
+
+	// swap one bit
+	for i := 0; i < d.alphabet.len(); i++ {
+		bit := uint32(i)
+		bmCandidate := bmSrc.clone()
+		bmCandidate.xor(bit)
+
+		// swap one more bit to be able to fix:
+		// - two deletions ("rang" => "orange")
+		// - replacements ("problam" => "problem")
+		for j := 0; j < d.alphabet.len(); j++ {
+			bit := uint32(j)
+			bmCandidate := bmCandidate.clone()
+			bmCandidate.xor(bit)
+			if len(d.index[bmCandidate]) == 0 {
+				continue
+			}
+			bitmaps[bmCandidate] = struct{}{}
+		}
+
+		if len(d.index[bmCandidate]) == 0 {
+			continue
+		}
+		bitmaps[bmCandidate] = struct{}{}
+	}
+
+	return bitmaps
 }
 
 func calcScores(src []rune, candidates []сandidate) []match {

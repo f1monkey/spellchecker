@@ -14,6 +14,10 @@ func (b *bitmap) isEmpty() bool {
 	return *b == 0
 }
 
+func (b *bitmap) has(id uint32) bool {
+	return *b&(1<<id) > 0
+}
+
 func (b *bitmap) countDiff(b2 bitmap) int {
 	if *b == b2 {
 		return 0
@@ -21,7 +25,7 @@ func (b *bitmap) countDiff(b2 bitmap) int {
 
 	cnt := 0
 	for i := 0; i < 64; i++ {
-		if *b&(1<<i) != b2&(1<<i) {
+		if b.has(uint32(i)) != b2.has(uint32(i)) {
 			cnt++
 		}
 	}
