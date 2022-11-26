@@ -4,11 +4,11 @@ Yet another spellchecker written in go.
 
 ### Features:
 - very small database: approximately 1mb for 30,000 unique words
-- time to fix one word - ~35μs
+- average time to fix one word  ~35μs
 
 Accuracy in [Peter Norvig's tests](http://norvig.com/spell-correct.html):
-* test1 - ~74%
-* test2 - ~70%
+* test1 - about 74%
+* test2 - about 70%
 
 ## Installation
 
