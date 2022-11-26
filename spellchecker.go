@@ -18,7 +18,7 @@ type Spellchecker struct {
 }
 
 func New(alphabet Alphabet, opts ...OptionFunc) (*Spellchecker, error) {
-	dict, err := newDictionary(DefaultAlphabet)
+	dict, err := newDictionary(alphabet)
 	if err != nil {
 		return nil, err
 	}
