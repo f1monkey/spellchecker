@@ -163,8 +163,8 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 
 	total := 0
 	ok := 0
-
 	for i := 0; i < b.N; i++ {
+
 		for _, item := range data {
 			for _, word := range item.words {
 				if word == "" {
@@ -182,26 +182,24 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 					total++
 					if len(result) > 0 && result[0] == item.expected {
 						ok++
-					} else {
-						got := ""
-						if len(result) > 0 {
-							got = result[0]
-						}
-
-						fmt.Printf(
-							"word %q: expected %q, got %s, all: %v\n",
-							word, item.expected, got, result,
-						)
+						continue
 					}
+					// got := ""
+					// if len(result) > 0 {
+					// 	got = result[0]
+					// }
+
+					// b.Logf(
+					// 	"word %q: expected %q, got %s, all: %v\n",
+					// 	word, item.expected, got, result,
+					// )
 				}
 			}
 		}
+		b.ReportMetric(float64(ok), "success_words")
+		b.ReportMetric(float64(total), "total_words")
+		b.ReportMetric(float64(ok)/float64(total)*100, "success_percent")
 	}
-
-	fmt.Printf(
-		"Results: %d/%d (%.2f%%)",
-		ok, total, float64(ok)/float64(total)*100,
-	)
 }
 
 func Test_NewSpellchecker(t *testing.T) {
