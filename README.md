@@ -10,7 +10,7 @@ Yet another spellchecker written in go.
 ## Features:
 - very small database: approximately 1mb for 30,000 unique words
 - average time to fix one word  ~35μs
-- about 70-74% accuracy in Peter Norvig's test sets (see [benchamarks](#benchmarks))
+- about 70-74% accuracy in Peter Norvig's test sets (see [benchmarks](#benchmarks))
 
 ## Installation
 
