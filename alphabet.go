@@ -31,9 +31,8 @@ func newAlphabet(str string, length int) (alphabet, error) {
 		return nil, fmt.Errorf("alphabets longer than 63 are not supported (yet?)")
 	}
 
-	result := make(alphabet)
-
-	for i, s := range []rune(str) {
+	result := make(alphabet, length)
+	for i, s := range runes {
 		index := i % length
 		if _, ok := result[s]; ok {
 			return nil, fmt.Errorf("duplicate symbol %q at position %d", s, i)
