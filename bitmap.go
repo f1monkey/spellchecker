@@ -1,5 +1,7 @@
 package spellchecker
 
+import "math/bits"
+
 type bitmap int64
 
 func (b *bitmap) or(id uint32) {
@@ -19,18 +21,7 @@ func (b *bitmap) has(id uint32) bool {
 }
 
 func (b *bitmap) countDiff(b2 bitmap) int {
-	if *b == b2 {
-		return 0
-	}
-
-	cnt := 0
-	for i := 0; i < 64; i++ {
-		if b.has(uint32(i)) != b2.has(uint32(i)) {
-			cnt++
-		}
-	}
-
-	return cnt
+	return bits.OnesCount64(uint64(*b) ^ uint64(b2))
 }
 
 func (b *bitmap) clone() bitmap {

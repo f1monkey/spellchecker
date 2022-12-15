@@ -11,7 +11,7 @@ import (
 	"github.com/agnivade/levenshtein"
 )
 
-// maxErrros is not a "max errors" in a word. It is a max diff in bits betweeen the "search word" and a "dictionary word".
+// maxErrors is not a "max errors" in a word. It is a max diff in bits betweeen the "search word" and a "dictionary word".
 // i.e. one simple symbol replacement (problam => problem ) is a two-bit difference.
 const maxErrors = 2
 
@@ -125,9 +125,9 @@ type сandidate struct {
 func (d *dictionary) getCandidates(word string, bmSrc bitmap, errCnt int) []сandidate {
 	checked := make(map[bitmap]struct{}, d.alphabet.len()*2)
 
-	// "exact match" OR "candidate has all the same letters as the word but in different order"
 	result := make([]сandidate, 0, 50)
 
+	// "exact match" OR "candidate has all the same letters as the word but in different order"
 	checked[bmSrc] = struct{}{}
 	ids := d.index[bmSrc]
 	for _, id := range ids {
