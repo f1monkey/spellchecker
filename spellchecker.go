@@ -7,30 +7,35 @@ import (
 	"sync"
 )
 
+const DefaultMaxErrors = 2
+
 // OptionFunc option setter
 type OptionFunc func(m *Spellchecker) error
 
 type Spellchecker struct {
 	mtx sync.RWMutex
 
-	dict     *dictionary
-	splitter bufio.SplitFunc
+	dict      *dictionary
+	splitter  bufio.SplitFunc
+	maxErrors int
 }
 
 func New(alphabet Alphabet, opts ...OptionFunc) (*Spellchecker, error) {
-	dict, err := newDictionary(alphabet)
-	if err != nil {
-		return nil, err
-	}
 
 	result := &Spellchecker{
-		dict: dict,
+		maxErrors: DefaultMaxErrors,
 	}
 	for _, o := range opts {
 		if err := o(result); err != nil {
 			return nil, err
 		}
 	}
+
+	dict, err := newDictionary(alphabet, result.maxErrors)
+	if err != nil {
+		return nil, err
+	}
+	result.dict = dict
 
 	return result, nil
 }
@@ -140,6 +145,15 @@ func (s *Spellchecker) WithOpts(opts ...OptionFunc) error {
 func WithSplitter(f bufio.SplitFunc) OptionFunc {
 	return func(s *Spellchecker) error {
 		s.splitter = f
+		return nil
+	}
+}
+
+// WithMaxErrors set maxErrors, which is a max diff in bits betweeen the "search word" and a "dictionary word".
+// i.e. one simple symbol replacement (problam => problem ) is a two-bit difference
+func WithMaxErrors(maxErrors int) OptionFunc {
+	return func(m *Spellchecker) error {
+		m.maxErrors = maxErrors
 		return nil
 	}
 }

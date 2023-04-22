@@ -27,4 +27,5 @@ func Test_Spellchecker_Save(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.EqualValues(t, m1.dict.id("green"), m2.dict.id("green"))
+	assert.EqualValues(t, m1.dict.maxErrors, m2.dict.maxErrors)
 }
