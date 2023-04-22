@@ -26,7 +26,7 @@ func main() {
 	sc, err := spellchecker.New(spellchecker.Alphabet{
 		Letters: "abcdefghijklmnopqrstuvwxyz1234567890",
 		Length:  36,
-	})
+	}, spellchecker.WithMaxErrors(2))
 	if err != nil {
 		panic(err)
 	}

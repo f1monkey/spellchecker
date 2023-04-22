@@ -11,10 +11,6 @@ import (
 	"github.com/agnivade/levenshtein"
 )
 
-// maxErrors is not a "max errors" in a word. It is a max diff in bits betweeen the "search word" and a "dictionary word".
-// i.e. one simple symbol replacement (problam => problem ) is a two-bit difference.
-const maxErrors = 2
-
 type Doc struct {
 	Word  string
 	Count int
@@ -23,26 +19,28 @@ type Doc struct {
 type dictionary struct {
 	mtx sync.RWMutex
 
-	alphabet alphabet
-	nextID   uint32
-	ids      map[string]uint32
-	docs     map[uint32]Doc
+	maxErrors int
+	alphabet  alphabet
+	nextID    uint32
+	ids       map[string]uint32
+	docs      map[uint32]Doc
 
 	index map[bitmap][]uint32
 }
 
-func newDictionary(ab Alphabet) (*dictionary, error) {
+func newDictionary(ab Alphabet, maxErrors int) (*dictionary, error) {
 	alphabet, err := newAlphabet(ab.Letters, ab.Length)
 	if err != nil {
 		return nil, err
 	}
 
 	return &dictionary{
-		alphabet: alphabet,
-		nextID:   1,
-		ids:      make(map[string]uint32),
-		docs:     make(map[uint32]Doc),
-		index:    make(map[bitmap][]uint32),
+		maxErrors: maxErrors,
+		alphabet:  alphabet,
+		nextID:    1,
+		ids:       make(map[string]uint32),
+		docs:      make(map[uint32]Doc),
+		index:     make(map[bitmap][]uint32),
 	}, nil
 }
 
@@ -101,7 +99,7 @@ func (d *dictionary) Find(word string, n int) []match {
 	d.mtx.RLock()
 	defer d.mtx.RUnlock()
 
-	if maxErrors <= 0 {
+	if d.maxErrors <= 0 {
 		return nil
 	}
 
@@ -137,7 +135,7 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap, errCnt int) []сan
 		}
 
 		distance := levenshtein.ComputeDistance(word, doc.Word)
-		if distance > maxErrors {
+		if distance > d.maxErrors {
 			continue
 		}
 		result = append(result, сandidate{
@@ -162,7 +160,7 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap, errCnt int) []сan
 			}
 
 			distance := levenshtein.ComputeDistance(word, doc.Word)
-			if distance > maxErrors {
+			if distance > d.maxErrors {
 				continue
 			}
 			result = append(result, сandidate{
@@ -245,6 +243,8 @@ type dictData struct {
 
 	Counts map[uint32]int
 	Index  map[bitmap][]uint32
+
+	MaxErrors int
 }
 
 func (d *dictionary) MarshalBinary() ([]byte, error) {
@@ -252,11 +252,12 @@ func (d *dictionary) MarshalBinary() ([]byte, error) {
 	defer d.mtx.Unlock()
 
 	data := &dictData{
-		Alphabet: d.alphabet,
-		NextID:   d.nextID,
-		IDs:      d.ids,
-		Docs:     d.docs,
-		Index:    d.index,
+		Alphabet:  d.alphabet,
+		NextID:    d.nextID,
+		IDs:       d.ids,
+		Docs:      d.docs,
+		Index:     d.index,
+		MaxErrors: d.maxErrors,
 	}
 
 	buf := &bytes.Buffer{}
@@ -283,6 +284,7 @@ func (d *dictionary) UnmarshalBinary(data []byte) error {
 	d.ids = dictData.IDs
 	d.docs = dictData.Docs
 	d.index = dictData.Index
+	d.maxErrors = dictData.MaxErrors
 
 	return nil
 }
