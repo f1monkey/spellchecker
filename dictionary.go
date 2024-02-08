@@ -7,6 +7,7 @@ import (
 	"math"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/agnivade/levenshtein"
 )
@@ -21,7 +22,7 @@ type dictionary struct {
 
 	maxErrors int
 	alphabet  alphabet
-	nextID    uint32
+	nextID    func() uint32
 	ids       map[string]uint32
 	docs      map[uint32]Doc
 
@@ -37,14 +38,14 @@ func newDictionary(ab Alphabet, maxErrors int) (*dictionary, error) {
 	return &dictionary{
 		maxErrors: maxErrors,
 		alphabet:  alphabet,
-		nextID:    1,
+		nextID:    idSeq(0),
 		ids:       make(map[string]uint32),
 		docs:      make(map[uint32]Doc),
 		index:     make(map[bitmap][]uint32),
 	}, nil
 }
 
-// id Get ID of the word. Returns 0 if not found
+// id get ID of the word. Returns 0 if not found
 func (d *dictionary) id(word string) uint32 {
 	d.mtx.RLock()
 	defer d.mtx.RUnlock()
@@ -52,7 +53,7 @@ func (d *dictionary) id(word string) uint32 {
 	return d.ids[word]
 }
 
-// has Check if word is present in the dictionary
+// has check if the word is present in the dictionary
 func (d *dictionary) has(word string) bool {
 	d.mtx.RLock()
 	defer d.mtx.RUnlock()
@@ -60,14 +61,13 @@ func (d *dictionary) has(word string) bool {
 	return d.ids[word] > 0
 }
 
-// add Puts new word to the dictionary
+// add puts the word to the dictionary
 func (d *dictionary) add(word string) (uint32, error) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
-	id := d.nextID
+	id := d.nextID()
 	d.ids[word] = id
-	d.nextID++
 
 	runes := []rune(word)
 	d.docs[id] = Doc{Word: word, Count: 1}
@@ -77,7 +77,7 @@ func (d *dictionary) add(word string) (uint32, error) {
 	return id, nil
 }
 
-// inc Increase word occurence counter
+// inc increase word occurence counter
 func (d *dictionary) inc(id uint32) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
@@ -237,7 +237,6 @@ var _ encoding.BinaryUnmarshaler = (*dictionary)(nil)
 
 type dictData struct {
 	Alphabet alphabet
-	NextID   uint32
 	IDs      map[string]uint32
 	Docs     map[uint32]Doc
 
@@ -253,7 +252,6 @@ func (d *dictionary) MarshalBinary() ([]byte, error) {
 
 	data := &dictData{
 		Alphabet:  d.alphabet,
-		NextID:    d.nextID,
 		IDs:       d.ids,
 		Docs:      d.docs,
 		Index:     d.index,
@@ -280,11 +278,24 @@ func (d *dictionary) UnmarshalBinary(data []byte) error {
 	}
 
 	d.alphabet = dictData.Alphabet
-	d.nextID = dictData.NextID
 	d.ids = dictData.IDs
 	d.docs = dictData.Docs
 	d.index = dictData.Index
 	d.maxErrors = dictData.MaxErrors
 
+	var max uint32
+	for _, id := range d.ids {
+		if id > max {
+			max = id
+		}
+	}
+	d.nextID = idSeq(max)
+
 	return nil
+}
+
+func idSeq(start uint32) func() uint32 {
+	return func() uint32 {
+		return atomic.AddUint32(&start, 1)
+	}
 }
