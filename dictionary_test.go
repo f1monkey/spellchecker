@@ -30,14 +30,16 @@ func Test_dictionary_add(t *testing.T) {
 		id, err := dict.add("qwe")
 		require.NoError(t, err)
 		require.Equal(t, uint32(1), id)
-		require.Equal(t, 1, dict.docs[id].Count)
+		require.Equal(t, 1, dict.counts[id])
+		require.Equal(t, "qwe", dict.words[id])
 		require.Equal(t, 1, len(dict.ids))
 		require.Len(t, dict.index, 1)
 
 		id, err = dict.add("asd")
 		require.NoError(t, err)
 		require.Equal(t, uint32(2), id)
-		require.Equal(t, 1, dict.docs[id].Count)
+		require.Equal(t, 1, dict.counts[id])
+		require.Equal(t, "asd", dict.words[id])
 		require.Equal(t, 2, len(dict.ids))
 		require.Len(t, dict.index, 2)
 
@@ -48,13 +50,13 @@ func Test_dictionary_add(t *testing.T) {
 func Test_Dictionary_Inc(t *testing.T) {
 	t.Run("must increase counter value", func(t *testing.T) {
 		dict, err := newDictionary(DefaultAlphabet, DefaultMaxErrors)
-		dict.docs[1] = Doc{}
+		dict.counts[1] = 0
 		require.NoError(t, err)
 
-		require.Equal(t, 0, dict.docs[1].Count)
-		require.Equal(t, 0, dict.docs[2].Count)
+		require.Equal(t, 0, dict.counts[1])
+		require.Equal(t, 0, dict.counts[2])
 		dict.inc(1)
-		require.Equal(t, 1, dict.docs[1].Count)
-		require.Equal(t, 0, dict.docs[2].Count)
+		require.Equal(t, 1, dict.counts[1])
+		require.Equal(t, 0, dict.counts[2])
 	})
 }

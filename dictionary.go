@@ -12,19 +12,16 @@ import (
 	"github.com/agnivade/levenshtein"
 )
 
-type Doc struct {
-	Word  string
-	Count int
-}
-
 type dictionary struct {
 	mtx sync.RWMutex
 
 	maxErrors int
 	alphabet  alphabet
 	nextID    func() uint32
-	ids       map[string]uint32
-	docs      map[uint32]Doc
+
+	words  map[uint32]string
+	ids    map[string]uint32
+	counts map[uint32]int
 
 	index map[bitmap][]uint32
 }
@@ -40,7 +37,8 @@ func newDictionary(ab Alphabet, maxErrors int) (*dictionary, error) {
 		alphabet:  alphabet,
 		nextID:    idSeq(0),
 		ids:       make(map[string]uint32),
-		docs:      make(map[uint32]Doc),
+		words:     make(map[uint32]string),
+		counts:    make(map[uint32]int),
 		index:     make(map[bitmap][]uint32),
 	}, nil
 }
@@ -70,7 +68,8 @@ func (d *dictionary) add(word string) (uint32, error) {
 	d.ids[word] = id
 
 	runes := []rune(word)
-	d.docs[id] = Doc{Word: word, Count: 1}
+	d.counts[id] = 1
+	d.words[id] = word
 	m := d.alphabet.encode(runes)
 	d.index[m] = append(d.index[m], id)
 
@@ -82,12 +81,11 @@ func (d *dictionary) inc(id uint32) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
-	doc, ok := d.docs[id]
+	_, ok := d.counts[id]
 	if !ok {
 		return
 	}
-	doc.Count++
-	d.docs[id] = doc
+	d.counts[id]++
 }
 
 type match struct {
@@ -129,18 +127,18 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap, errCnt int) []сan
 	checked[bmSrc] = struct{}{}
 	ids := d.index[bmSrc]
 	for _, id := range ids {
-		doc, ok := d.docs[id]
+		docWord, ok := d.words[id]
 		if !ok {
 			continue
 		}
 
-		distance := levenshtein.ComputeDistance(word, doc.Word)
+		distance := levenshtein.ComputeDistance(word, docWord)
 		if distance > d.maxErrors {
 			continue
 		}
 		result = append(result, сandidate{
-			Word:     doc.Word,
-			Count:    doc.Count,
+			Word:     docWord,
+			Count:    d.counts[id],
 			Distance: distance,
 		})
 	}
@@ -154,18 +152,18 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap, errCnt int) []сan
 	for bm := range d.computeCandidateBitmaps(word, bmSrc) {
 		ids := d.index[bm]
 		for _, id := range ids {
-			doc, ok := d.docs[id]
+			docWord, ok := d.words[id]
 			if !ok {
 				continue
 			}
 
-			distance := levenshtein.ComputeDistance(word, doc.Word)
+			distance := levenshtein.ComputeDistance(word, docWord)
 			if distance > d.maxErrors {
 				continue
 			}
 			result = append(result, сandidate{
-				Word:     doc.Word,
-				Count:    doc.Count,
+				Word:     docWord,
+				Count:    d.counts[id],
 				Distance: distance,
 			})
 		}
@@ -238,10 +236,10 @@ var _ encoding.BinaryUnmarshaler = (*dictionary)(nil)
 type dictData struct {
 	Alphabet alphabet
 	IDs      map[string]uint32
-	Docs     map[uint32]Doc
+	Words    map[uint32]string
+	Counts   map[uint32]int
 
-	Counts map[uint32]int
-	Index  map[bitmap][]uint32
+	Index map[bitmap][]uint32
 
 	MaxErrors int
 }
@@ -253,7 +251,8 @@ func (d *dictionary) MarshalBinary() ([]byte, error) {
 	data := &dictData{
 		Alphabet:  d.alphabet,
 		IDs:       d.ids,
-		Docs:      d.docs,
+		Words:     d.words,
+		Counts:    d.counts,
 		Index:     d.index,
 		MaxErrors: d.maxErrors,
 	}
@@ -279,7 +278,8 @@ func (d *dictionary) UnmarshalBinary(data []byte) error {
 
 	d.alphabet = dictData.Alphabet
 	d.ids = dictData.IDs
-	d.docs = dictData.Docs
+	d.counts = dictData.Counts
+	d.words = dictData.Words
 	d.index = dictData.Index
 	d.maxErrors = dictData.MaxErrors
 
