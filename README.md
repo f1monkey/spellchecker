@@ -2,10 +2,13 @@
 
 Yet another spellchecker written in go.
 
-* [Features](#features)
-* [Installation](#installation)
-* [Usage](#usage)
-* [Benchmarks](#benchmarks)
+- [Spellchecker](#spellchecker)
+	- [Features:](#features)
+	- [Installation](#installation)
+	- [Usage](#usage)
+	- [Benchmarks](#benchmarks)
+			- [Test set 1:](#test-set-1)
+			- [Test set 2:](#test-set-2)
 
 ## Features:
 - very small database: approximately 1mb for 30,000 unique words
@@ -23,10 +26,10 @@ $ go get -v github.com/f1monkey/spellchecker
 ```go
 func main() {
 	// Create new instance
-	sc, err := spellchecker.New(spellchecker.Alphabet{
-		Letters: "abcdefghijklmnopqrstuvwxyz1234567890",
-		Length:  36,
-	}, spellchecker.WithMaxErrors(2))
+	sc, err := spellchecker.New(
+		"abcdefghijklmnopqrstuvwxyz1234567890", // allowed symbols, other symbols will be ignored
+		spellchecker.WithMaxErrors(2)
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -90,10 +93,10 @@ Running tool: /usr/local/go/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norv
 goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker
-cpu: Intel(R) Core(TM) i9-8950HK CPU @ 2.90GHz
-Benchmark_Norvig1-12    	     100	  10721930 ns/op	        74.07 success_percent	       200.0 success_words	       270.0 total_words	 1085913 B/op	    2063 allocs/op
+cpu: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics     
+Benchmark_Norvig1-16    	     242	   4861057 ns/op	        74.07 success_percent	       200.0 success_words	       270.0 total_words	 1643485 B/op	   88241 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	1.910s
+ok  	github.com/f1monkey/spellchecker	3.343s
 ```
 
 #### [Test set 2](http://norvig.com/spell-testset2.txt):
@@ -104,8 +107,8 @@ Running tool: /usr/local/go/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norv
 goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker
-cpu: Intel(R) Core(TM) i9-8950HK CPU @ 2.90GHz
-Benchmark_Norvig2-12    	      72	  13977916 ns/op	        70.00 success_percent	       280.0 success_words	       400.0 total_words	 1573316 B/op	    3050 allocs/op
+cpu: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics     
+Benchmark_Norvig2-16    	     150	   7226006 ns/op	        70.00 success_percent	       280.0 success_words	       400.0 total_words	 2389231 B/op	  129486 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	1.874s
+ok  	github.com/f1monkey/spellchecker	3.244s
 ```

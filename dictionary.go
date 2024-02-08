@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/agnivade/levenshtein"
+	"github.com/f1monkey/bitmap"
 )
 
 type dictionary struct {
@@ -23,11 +24,11 @@ type dictionary struct {
 	ids    map[string]uint32
 	counts map[uint32]int
 
-	index map[bitmap][]uint32
+	index map[uint64][]uint32
 }
 
-func newDictionary(ab Alphabet, maxErrors int) (*dictionary, error) {
-	alphabet, err := newAlphabet(ab.Letters, ab.Length)
+func newDictionary(ab string, maxErrors int) (*dictionary, error) {
+	alphabet, err := newAlphabet(ab)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +40,7 @@ func newDictionary(ab Alphabet, maxErrors int) (*dictionary, error) {
 		ids:       make(map[string]uint32),
 		words:     make(map[uint32]string),
 		counts:    make(map[uint32]int),
-		index:     make(map[bitmap][]uint32),
+		index:     make(map[uint64][]uint32),
 	}, nil
 }
 
@@ -70,8 +71,8 @@ func (d *dictionary) add(word string) (uint32, error) {
 	runes := []rune(word)
 	d.counts[id] = 1
 	d.words[id] = word
-	m := d.alphabet.encode(runes)
-	d.index[m] = append(d.index[m], id)
+	key := sum(d.alphabet.encode(runes))
+	d.index[key] = append(d.index[key], id)
 
 	return id, nil
 }
@@ -118,14 +119,15 @@ type сandidate struct {
 	Count    int
 }
 
-func (d *dictionary) getCandidates(word string, bmSrc bitmap, errCnt int) []сandidate {
-	checked := make(map[bitmap]struct{}, d.alphabet.len()*2)
+func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32, errCnt int) []сandidate {
+	checked := make(map[uint64]struct{}, d.alphabet.len()*2)
 
 	result := make([]сandidate, 0, 50)
 
 	// "exact match" OR "candidate has all the same letters as the word but in different order"
-	checked[bmSrc] = struct{}{}
-	ids := d.index[bmSrc]
+	key := sum(bmSrc)
+	checked[key] = struct{}{}
+	ids := d.index[key]
 	for _, id := range ids {
 		docWord, ok := d.words[id]
 		if !ok {
@@ -172,32 +174,34 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap, errCnt int) []сan
 	return result
 }
 
-func (d *dictionary) computeCandidateBitmaps(word string, bmSrc bitmap) map[bitmap]struct{} {
-	bitmaps := make(map[bitmap]struct{}, d.alphabet.len()*5)
+func (d *dictionary) computeCandidateBitmaps(word string, bmSrc bitmap.Bitmap32) map[uint64]struct{} {
+	bitmaps := make(map[uint64]struct{}, d.alphabet.len()*5)
 
 	// swap one bit
 	for i := 0; i < d.alphabet.len(); i++ {
 		bit := uint32(i)
-		bmCandidate := bmSrc.clone()
-		bmCandidate.xor(bit)
+		bmCandidate := bmSrc.Clone()
+		bmCandidate.Xor(bit)
 
 		// swap one more bit to be able to fix:
 		// - two deletions ("rang" => "orange")
 		// - replacements ("problam" => "problem")
 		for j := 0; j < d.alphabet.len(); j++ {
 			bit := uint32(j)
-			bmCandidate := bmCandidate.clone()
-			bmCandidate.xor(bit)
-			if len(d.index[bmCandidate]) == 0 {
+			bmCandidate := bmCandidate.Clone()
+			bmCandidate.Xor(bit)
+			key := sum(bmCandidate)
+			if len(d.index[key]) == 0 {
 				continue
 			}
-			bitmaps[bmCandidate] = struct{}{}
+			bitmaps[key] = struct{}{}
 		}
 
-		if len(d.index[bmCandidate]) == 0 {
+		key := sum(bmCandidate)
+		if len(d.index[key]) == 0 {
 			continue
 		}
-		bitmaps[bmCandidate] = struct{}{}
+		bitmaps[key] = struct{}{}
 	}
 
 	return bitmaps
@@ -239,7 +243,7 @@ type dictData struct {
 	Words    map[uint32]string
 	Counts   map[uint32]int
 
-	Index map[bitmap][]uint32
+	Index map[uint64][]uint32
 
 	MaxErrors int
 }
@@ -298,4 +302,15 @@ func idSeq(start uint32) func() uint32 {
 	return func() uint32 {
 		return atomic.AddUint32(&start, 1)
 	}
+}
+
+func sum(b bitmap.Bitmap32) uint64 {
+	var result uint64
+	var mult uint64 = 1
+	for i := range b {
+		result += uint64(b[i]) * mult
+		mult *= 10
+	}
+
+	return result
 }
