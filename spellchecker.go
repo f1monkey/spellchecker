@@ -20,8 +20,7 @@ type Spellchecker struct {
 	maxErrors int
 }
 
-func New(alphabet Alphabet, opts ...OptionFunc) (*Spellchecker, error) {
-
+func New(alphabet string, opts ...OptionFunc) (*Spellchecker, error) {
 	result := &Spellchecker{
 		maxErrors: DefaultMaxErrors,
 	}

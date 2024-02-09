@@ -7,29 +7,28 @@ import (
 	"math"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/agnivade/levenshtein"
+	"github.com/f1monkey/bitmap"
 )
-
-type Doc struct {
-	Word  string
-	Count int
-}
 
 type dictionary struct {
 	mtx sync.RWMutex
 
 	maxErrors int
 	alphabet  alphabet
-	nextID    uint32
-	ids       map[string]uint32
-	docs      map[uint32]Doc
+	nextID    func() uint32
 
-	index map[bitmap][]uint32
+	words  map[uint32]string
+	ids    map[string]uint32
+	counts map[uint32]int
+
+	index map[uint64][]uint32
 }
 
-func newDictionary(ab Alphabet, maxErrors int) (*dictionary, error) {
-	alphabet, err := newAlphabet(ab.Letters, ab.Length)
+func newDictionary(ab string, maxErrors int) (*dictionary, error) {
+	alphabet, err := newAlphabet(ab)
 	if err != nil {
 		return nil, err
 	}
@@ -37,14 +36,15 @@ func newDictionary(ab Alphabet, maxErrors int) (*dictionary, error) {
 	return &dictionary{
 		maxErrors: maxErrors,
 		alphabet:  alphabet,
-		nextID:    1,
+		nextID:    idSeq(0),
 		ids:       make(map[string]uint32),
-		docs:      make(map[uint32]Doc),
-		index:     make(map[bitmap][]uint32),
+		words:     make(map[uint32]string),
+		counts:    make(map[uint32]int),
+		index:     make(map[uint64][]uint32),
 	}, nil
 }
 
-// id Get ID of the word. Returns 0 if not found
+// id get ID of the word. Returns 0 if not found
 func (d *dictionary) id(word string) uint32 {
 	d.mtx.RLock()
 	defer d.mtx.RUnlock()
@@ -52,7 +52,7 @@ func (d *dictionary) id(word string) uint32 {
 	return d.ids[word]
 }
 
-// has Check if word is present in the dictionary
+// has check if the word is present in the dictionary
 func (d *dictionary) has(word string) bool {
 	d.mtx.RLock()
 	defer d.mtx.RUnlock()
@@ -60,34 +60,33 @@ func (d *dictionary) has(word string) bool {
 	return d.ids[word] > 0
 }
 
-// add Puts new word to the dictionary
+// add puts the word to the dictionary
 func (d *dictionary) add(word string) (uint32, error) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
-	id := d.nextID
+	id := d.nextID()
 	d.ids[word] = id
-	d.nextID++
 
 	runes := []rune(word)
-	d.docs[id] = Doc{Word: word, Count: 1}
-	m := d.alphabet.encode(runes)
-	d.index[m] = append(d.index[m], id)
+	d.counts[id] = 1
+	d.words[id] = word
+	key := sum(d.alphabet.encode(runes))
+	d.index[key] = append(d.index[key], id)
 
 	return id, nil
 }
 
-// inc Increase word occurence counter
+// inc increase word occurence counter
 func (d *dictionary) inc(id uint32) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
-	doc, ok := d.docs[id]
+	_, ok := d.counts[id]
 	if !ok {
 		return
 	}
-	doc.Count++
-	d.docs[id] = doc
+	d.counts[id]++
 }
 
 type match struct {
@@ -120,27 +119,28 @@ type сandidate struct {
 	Count    int
 }
 
-func (d *dictionary) getCandidates(word string, bmSrc bitmap, errCnt int) []сandidate {
-	checked := make(map[bitmap]struct{}, d.alphabet.len()*2)
+func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32, errCnt int) []сandidate {
+	checked := make(map[uint64]struct{}, d.alphabet.len()*2)
 
 	result := make([]сandidate, 0, 50)
 
 	// "exact match" OR "candidate has all the same letters as the word but in different order"
-	checked[bmSrc] = struct{}{}
-	ids := d.index[bmSrc]
+	key := sum(bmSrc)
+	checked[key] = struct{}{}
+	ids := d.index[key]
 	for _, id := range ids {
-		doc, ok := d.docs[id]
+		docWord, ok := d.words[id]
 		if !ok {
 			continue
 		}
 
-		distance := levenshtein.ComputeDistance(word, doc.Word)
+		distance := levenshtein.ComputeDistance(word, docWord)
 		if distance > d.maxErrors {
 			continue
 		}
 		result = append(result, сandidate{
-			Word:     doc.Word,
-			Count:    doc.Count,
+			Word:     docWord,
+			Count:    d.counts[id],
 			Distance: distance,
 		})
 	}
@@ -154,18 +154,18 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap, errCnt int) []сan
 	for bm := range d.computeCandidateBitmaps(word, bmSrc) {
 		ids := d.index[bm]
 		for _, id := range ids {
-			doc, ok := d.docs[id]
+			docWord, ok := d.words[id]
 			if !ok {
 				continue
 			}
 
-			distance := levenshtein.ComputeDistance(word, doc.Word)
+			distance := levenshtein.ComputeDistance(word, docWord)
 			if distance > d.maxErrors {
 				continue
 			}
 			result = append(result, сandidate{
-				Word:     doc.Word,
-				Count:    doc.Count,
+				Word:     docWord,
+				Count:    d.counts[id],
 				Distance: distance,
 			})
 		}
@@ -174,32 +174,34 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap, errCnt int) []сan
 	return result
 }
 
-func (d *dictionary) computeCandidateBitmaps(word string, bmSrc bitmap) map[bitmap]struct{} {
-	bitmaps := make(map[bitmap]struct{}, d.alphabet.len()*5)
+func (d *dictionary) computeCandidateBitmaps(word string, bmSrc bitmap.Bitmap32) map[uint64]struct{} {
+	bitmaps := make(map[uint64]struct{}, d.alphabet.len()*5)
 
 	// swap one bit
 	for i := 0; i < d.alphabet.len(); i++ {
 		bit := uint32(i)
-		bmCandidate := bmSrc.clone()
-		bmCandidate.xor(bit)
+		bmCandidate := bmSrc.Clone()
+		bmCandidate.Xor(bit)
 
 		// swap one more bit to be able to fix:
 		// - two deletions ("rang" => "orange")
 		// - replacements ("problam" => "problem")
 		for j := 0; j < d.alphabet.len(); j++ {
 			bit := uint32(j)
-			bmCandidate := bmCandidate.clone()
-			bmCandidate.xor(bit)
-			if len(d.index[bmCandidate]) == 0 {
+			bmCandidate := bmCandidate.Clone()
+			bmCandidate.Xor(bit)
+			key := sum(bmCandidate)
+			if len(d.index[key]) == 0 {
 				continue
 			}
-			bitmaps[bmCandidate] = struct{}{}
+			bitmaps[key] = struct{}{}
 		}
 
-		if len(d.index[bmCandidate]) == 0 {
+		key := sum(bmCandidate)
+		if len(d.index[key]) == 0 {
 			continue
 		}
-		bitmaps[bmCandidate] = struct{}{}
+		bitmaps[key] = struct{}{}
 	}
 
 	return bitmaps
@@ -237,12 +239,11 @@ var _ encoding.BinaryUnmarshaler = (*dictionary)(nil)
 
 type dictData struct {
 	Alphabet alphabet
-	NextID   uint32
 	IDs      map[string]uint32
-	Docs     map[uint32]Doc
+	Words    map[uint32]string
+	Counts   map[uint32]int
 
-	Counts map[uint32]int
-	Index  map[bitmap][]uint32
+	Index map[uint64][]uint32
 
 	MaxErrors int
 }
@@ -253,9 +254,9 @@ func (d *dictionary) MarshalBinary() ([]byte, error) {
 
 	data := &dictData{
 		Alphabet:  d.alphabet,
-		NextID:    d.nextID,
 		IDs:       d.ids,
-		Docs:      d.docs,
+		Words:     d.words,
+		Counts:    d.counts,
 		Index:     d.index,
 		MaxErrors: d.maxErrors,
 	}
@@ -280,11 +281,36 @@ func (d *dictionary) UnmarshalBinary(data []byte) error {
 	}
 
 	d.alphabet = dictData.Alphabet
-	d.nextID = dictData.NextID
 	d.ids = dictData.IDs
-	d.docs = dictData.Docs
+	d.counts = dictData.Counts
+	d.words = dictData.Words
 	d.index = dictData.Index
 	d.maxErrors = dictData.MaxErrors
 
+	var max uint32
+	for _, id := range d.ids {
+		if id > max {
+			max = id
+		}
+	}
+	d.nextID = idSeq(max)
+
 	return nil
+}
+
+func idSeq(start uint32) func() uint32 {
+	return func() uint32 {
+		return atomic.AddUint32(&start, 1)
+	}
+}
+
+func sum(b bitmap.Bitmap32) uint64 {
+	var result uint64
+	var mult uint64 = 1
+	for i := range b {
+		result += uint64(b[i]) * mult
+		mult *= 10
+	}
+
+	return result
 }
