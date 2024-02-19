@@ -8,6 +8,8 @@ github.com/dgryski/trifles v0.0.0-20200323201526-dd97f9abfb48 h1:fRzb/w+pyskVMQ+
 github.com/dgryski/trifles v0.0.0-20200323201526-dd97f9abfb48/go.mod h1:if7Fbed8SFyPtHLHbg49SI7NAdJiC5WIA09pe59rfAA=
 github.com/f1monkey/bitmap v1.2.0 h1:INxVA52Ckcxb7RXrdWU63K5iJDsToTWTtcXWdLe5aNs=
 github.com/f1monkey/bitmap v1.2.0/go.mod h1:qOc9q5FQxdvMyjVDnmvfJxUtz8JIryqOGxpg4Vtg4nY=
+github.com/f1monkey/bitmap v1.4.0 h1:Is1PqZWrTawUowD/qE7Vnlh9fzXrEs/qxJHDQ47jZ3g=
+github.com/f1monkey/bitmap v1.4.0/go.mod h1:qOc9q5FQxdvMyjVDnmvfJxUtz8JIryqOGxpg4Vtg4nY=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/testify v1.8.4 h1:CcVxjf3Q8PM0mHUKJCdn+eZZtm5yQwehR5yeSVQQcUk=
