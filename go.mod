@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/agnivade/levenshtein v1.1.1
-	github.com/f1monkey/bitmap v1.2.0
+	github.com/f1monkey/bitmap v1.4.0
 	github.com/stretchr/testify v1.8.4
 )
 
