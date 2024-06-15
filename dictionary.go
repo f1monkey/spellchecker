@@ -85,7 +85,7 @@ func (d *dictionary) find(word string, n int) []match {
 	}
 
 	bm := d.alphabet.encode([]rune(word))
-	candidates := d.getCandidates(word, bm, 1)
+	candidates := d.getCandidates(word, bm)
 	result := calcScores([]rune(word), candidates)
 
 	if len(result) < n {
@@ -101,7 +101,7 @@ type сandidate struct {
 	Count    int
 }
 
-func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32, errCnt int) []сandidate {
+func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32) []сandidate {
 	checked := make(map[uint64]struct{}, d.alphabet.len()*2)
 
 	result := make([]сandidate, 0, 50)
@@ -133,7 +133,7 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32, errCnt in
 	}
 
 	// @todo perform phonetic analysis with early termination here
-	for bm := range d.computeCandidateBitmaps(word, bmSrc) {
+	for bm := range d.computeCandidateBitmaps(bmSrc) {
 		ids := d.index[bm]
 		for _, id := range ids {
 			docWord, ok := d.words[id]
@@ -156,7 +156,7 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32, errCnt in
 	return result
 }
 
-func (d *dictionary) computeCandidateBitmaps(word string, bmSrc bitmap.Bitmap32) map[uint64]struct{} {
+func (d *dictionary) computeCandidateBitmaps(bmSrc bitmap.Bitmap32) map[uint64]struct{} {
 	bitmaps := make(map[uint64]struct{}, d.alphabet.len()*5)
 
 	// swap one bit
