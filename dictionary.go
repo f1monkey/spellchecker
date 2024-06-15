@@ -6,7 +6,6 @@ import (
 	"encoding/gob"
 	"math"
 	"sort"
-	"sync"
 	"sync/atomic"
 
 	"github.com/agnivade/levenshtein"
@@ -14,8 +13,6 @@ import (
 )
 
 type dictionary struct {
-	mtx sync.RWMutex
-
 	maxErrors int
 	alphabet  alphabet
 	nextID    func() uint32
@@ -46,25 +43,16 @@ func newDictionary(ab string, maxErrors int) (*dictionary, error) {
 
 // id get ID of the word. Returns 0 if not found
 func (d *dictionary) id(word string) uint32 {
-	d.mtx.RLock()
-	defer d.mtx.RUnlock()
-
 	return d.ids[word]
 }
 
 // has check if the word is present in the dictionary
 func (d *dictionary) has(word string) bool {
-	d.mtx.RLock()
-	defer d.mtx.RUnlock()
-
 	return d.ids[word] > 0
 }
 
 // add puts the word to the dictionary
 func (d *dictionary) add(word string) (uint32, error) {
-	d.mtx.Lock()
-	defer d.mtx.Unlock()
-
 	id := d.nextID()
 	d.ids[word] = id
 
@@ -79,9 +67,6 @@ func (d *dictionary) add(word string) (uint32, error) {
 
 // inc increase word occurence counter
 func (d *dictionary) inc(id uint32) {
-	d.mtx.Lock()
-	defer d.mtx.Unlock()
-
 	_, ok := d.counts[id]
 	if !ok {
 		return
@@ -94,10 +79,7 @@ type match struct {
 	Score float64
 }
 
-func (d *dictionary) Find(word string, n int) []match {
-	d.mtx.RLock()
-	defer d.mtx.RUnlock()
-
+func (d *dictionary) find(word string, n int) []match {
 	if d.maxErrors <= 0 {
 		return nil
 	}
@@ -249,9 +231,6 @@ type dictData struct {
 }
 
 func (d *dictionary) MarshalBinary() ([]byte, error) {
-	d.mtx.Lock()
-	defer d.mtx.Unlock()
-
 	data := &dictData{
 		Alphabet:  d.alphabet,
 		IDs:       d.ids,
@@ -271,9 +250,6 @@ func (d *dictionary) MarshalBinary() ([]byte, error) {
 }
 
 func (d *dictionary) UnmarshalBinary(data []byte) error {
-	d.mtx.Lock()
-	defer d.mtx.Unlock()
-
 	dictData := &dictData{}
 	err := gob.NewDecoder(bytes.NewBuffer(data)).Decode(dictData)
 	if err != nil {

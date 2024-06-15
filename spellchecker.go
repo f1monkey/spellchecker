@@ -96,7 +96,7 @@ func (s *Spellchecker) Fix(word string) (string, error) {
 		return word, nil
 	}
 
-	hits := s.dict.Find(word, 1)
+	hits := s.dict.find(word, 1)
 	if len(hits) == 0 {
 		return word, fmt.Errorf("%w: %s", ErrUnknownWord, word)
 	}
@@ -113,7 +113,7 @@ func (s *Spellchecker) Suggest(word string, n int) ([]string, error) {
 		return []string{word}, nil
 	}
 
-	hits := s.dict.Find(word, n)
+	hits := s.dict.find(word, n)
 	if len(hits) == 0 {
 		return []string{word}, fmt.Errorf("%w: %s", ErrUnknownWord, word)
 	}
