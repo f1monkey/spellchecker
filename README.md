@@ -7,8 +7,8 @@ Yet another spellchecker written in go.
 	- [Installation](#installation)
 	- [Usage](#usage)
 	- [Benchmarks](#benchmarks)
-			- [Test set 1:](#test-set-1)
-			- [Test set 2:](#test-set-2)
+		- [Test set 1:](#test-set-1)
+		- [Test set 2:](#test-set-2)
 
 ## Features:
 - very small database: approximately 1mb for 30,000 unique words
