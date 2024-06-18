@@ -84,25 +84,17 @@ func (d *dictionary) find(word string, n int) []match {
 		return nil
 	}
 
-	bm := d.alphabet.encode([]rune(word))
-	candidates := d.getCandidates(word, bm)
-	result := calcScores([]rune(word), candidates)
+	candidates := d.getCandidates(word, n)
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].Score > candidates[j].Score })
 
-	if len(result) < n {
-		return result
-	}
-
-	return result[0:n]
+	return candidates
 }
 
-type сandidate struct {
-	Word     string
-	Distance int
-	Count    int
-}
+func (d *dictionary) getCandidates(word string, max int) []match {
+	result := newPriorityQueue(max)
 
-func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32) []сandidate {
-	result := make([]сandidate, 0, 50)
+	wordRunes := []rune(word)
+	bmSrc := d.alphabet.encode([]rune(wordRunes))
 
 	// "exact match" OR "candidate has all the same letters as the word but in different order"
 	key := sum(bmSrc)
@@ -117,16 +109,15 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32) []сandid
 		if distance > d.maxErrors {
 			continue
 		}
-		result = append(result, сandidate{
-			Word:     docWord,
-			Count:    d.counts[id],
-			Distance: distance,
+		result.Push(match{
+			Value: docWord,
+			Score: calcScore(wordRunes, []rune(docWord), distance, d.counts[id]),
 		})
 	}
 	// the most common mistake is a transposition of letters.
 	// so if we found one here, we do early termination
-	if len(result) != 0 {
-		return result
+	if result.Len() != 0 {
+		return result.items
 	}
 
 	// @todo perform phonetic analysis with early termination here
@@ -142,15 +133,14 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32) []сandid
 			if distance > d.maxErrors {
 				continue
 			}
-			result = append(result, сandidate{
-				Word:     docWord,
-				Count:    d.counts[id],
-				Distance: distance,
+			result.Push(match{
+				Value: docWord,
+				Score: calcScore(wordRunes, []rune(docWord), distance, d.counts[id]),
 			})
 		}
 	}
 
-	return result
+	return result.items
 }
 
 func (d *dictionary) computeCandidateBitmaps(bmSrc bitmap.Bitmap32) map[uint64]struct{} {
@@ -188,19 +178,6 @@ func (d *dictionary) computeCandidateBitmaps(bmSrc bitmap.Bitmap32) map[uint64]s
 	}
 
 	return bitmaps
-}
-
-func calcScores(src []rune, candidates []сandidate) []match {
-	result := make([]match, len(candidates))
-	for i, c := range candidates {
-		result[i] = match{
-			Value: c.Word,
-			Score: calcScore(src, []rune(c.Word), c.Distance, c.Count),
-		}
-	}
-	sort.Slice(result, func(i, j int) bool { return result[i].Score > result[j].Score })
-
-	return result
 }
 
 func calcScore(src []rune, candidate []rune, distance int, cnt int) float64 {
