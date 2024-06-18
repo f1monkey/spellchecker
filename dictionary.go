@@ -102,13 +102,10 @@ type сandidate struct {
 }
 
 func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32) []сandidate {
-	checked := make(map[uint64]struct{}, d.alphabet.len()*2)
-
 	result := make([]сandidate, 0, 50)
 
 	// "exact match" OR "candidate has all the same letters as the word but in different order"
 	key := sum(bmSrc)
-	checked[key] = struct{}{}
 	ids := d.index[key]
 	for _, id := range ids {
 		docWord, ok := d.words[id]
@@ -158,28 +155,32 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32) []сandid
 
 func (d *dictionary) computeCandidateBitmaps(bmSrc bitmap.Bitmap32) map[uint64]struct{} {
 	bitmaps := make(map[uint64]struct{}, d.alphabet.len()*5)
+	bmSrc = bmSrc.Clone()
 
+	var i, j uint32
 	// swap one bit
-	for i := 0; i < d.alphabet.len(); i++ {
-		bit := uint32(i)
-		bmCandidate := bmSrc.Clone()
-		bmCandidate.Xor(bit)
+	for i = 0; i < uint32(d.alphabet.len()); i++ {
+		bmSrc.Xor(i)
 
 		// swap one more bit to be able to fix:
 		// - two deletions ("rang" => "orange")
 		// - replacements ("problam" => "problem")
-		for j := 0; j < d.alphabet.len(); j++ {
-			bit := uint32(j)
-			bmCandidate := bmCandidate.Clone()
-			bmCandidate.Xor(bit)
-			key := sum(bmCandidate)
+		for j = 0; j < uint32(d.alphabet.len()); j++ {
+			if i == j {
+				continue
+			}
+
+			bmSrc.Xor(j)
+			key := sum(bmSrc)
+			bmSrc.Xor(j) // return back the changed bit
 			if len(d.index[key]) == 0 {
 				continue
 			}
 			bitmaps[key] = struct{}{}
 		}
 
-		key := sum(bmCandidate)
+		key := sum(bmSrc)
+		bmSrc.Xor(i) // return back the changed bit
 		if len(d.index[key]) == 0 {
 			continue
 		}
