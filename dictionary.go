@@ -84,22 +84,17 @@ func (d *dictionary) find(word string, n int) []match {
 		return nil
 	}
 
-	bm := d.alphabet.encode([]rune(word))
-
-	candidates := d.getCandidates(word, bm)
+	candidates := d.getCandidates(word, n)
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].Score > candidates[j].Score })
 
-	if len(candidates) < n {
-		return candidates
-	}
-
-	return candidates[0:n]
+	return candidates
 }
 
-func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32) []match {
-	result := make([]match, 0, 50)
+func (d *dictionary) getCandidates(word string, max int) []match {
+	result := newPriorityQueue(max)
 
 	wordRunes := []rune(word)
+	bmSrc := d.alphabet.encode([]rune(wordRunes))
 
 	// "exact match" OR "candidate has all the same letters as the word but in different order"
 	key := sum(bmSrc)
@@ -114,15 +109,15 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32) []match {
 		if distance > d.maxErrors {
 			continue
 		}
-		result = append(result, match{
+		result.Push(match{
 			Value: docWord,
 			Score: calcScore(wordRunes, []rune(docWord), distance, d.counts[id]),
 		})
 	}
 	// the most common mistake is a transposition of letters.
 	// so if we found one here, we do early termination
-	if len(result) != 0 {
-		return result
+	if result.Len() != 0 {
+		return result.items
 	}
 
 	// @todo perform phonetic analysis with early termination here
@@ -138,14 +133,14 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32) []match {
 			if distance > d.maxErrors {
 				continue
 			}
-			result = append(result, match{
+			result.Push(match{
 				Value: docWord,
 				Score: calcScore(wordRunes, []rune(docWord), distance, d.counts[id]),
 			})
 		}
 	}
 
-	return result
+	return result.items
 }
 
 func (d *dictionary) computeCandidateBitmaps(bmSrc bitmap.Bitmap32) map[uint64]struct{} {
