@@ -93,10 +93,10 @@ Running tool: /usr/local/go/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norv
 goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker
-cpu: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics     
-Benchmark_Norvig1-16    	     242	   4861057 ns/op	        74.07 success_percent	       200.0 success_words	       270.0 total_words	 1643485 B/op	   88241 allocs/op
+cpu: 13th Gen Intel(R) Core(TM) i9-13980HX
+Benchmark_Norvig1-32    	     294	   3876229 ns/op	        74.07 success_percent	       200.0 success_words	       270.0 total_words	  918275 B/op	    2150 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	3.343s
+ok  	github.com/f1monkey/spellchecker	3.378s
 ```
 
 #### [Test set 2](http://norvig.com/spell-testset2.txt):
@@ -107,8 +107,8 @@ Running tool: /usr/local/go/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norv
 goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker
-cpu: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics     
-Benchmark_Norvig2-16    	     150	   7226006 ns/op	        70.00 success_percent	       280.0 success_words	       400.0 total_words	 2389231 B/op	  129486 allocs/op
+cpu: 13th Gen Intel(R) Core(TM) i9-13980HX
+Benchmark_Norvig2-32    	     198	   6102429 ns/op	        70.00 success_percent	       280.0 success_words	       400.0 total_words	 1327385 B/op	    3121 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	3.244s
+ok  	github.com/f1monkey/spellchecker	3.895s
 ```

@@ -6,7 +6,6 @@ import (
 	"encoding/gob"
 	"math"
 	"sort"
-	"sync"
 	"sync/atomic"
 
 	"github.com/agnivade/levenshtein"
@@ -14,8 +13,6 @@ import (
 )
 
 type dictionary struct {
-	mtx sync.RWMutex
-
 	maxErrors int
 	alphabet  alphabet
 	nextID    func() uint32
@@ -46,25 +43,16 @@ func newDictionary(ab string, maxErrors int) (*dictionary, error) {
 
 // id get ID of the word. Returns 0 if not found
 func (d *dictionary) id(word string) uint32 {
-	d.mtx.RLock()
-	defer d.mtx.RUnlock()
-
 	return d.ids[word]
 }
 
 // has check if the word is present in the dictionary
 func (d *dictionary) has(word string) bool {
-	d.mtx.RLock()
-	defer d.mtx.RUnlock()
-
 	return d.ids[word] > 0
 }
 
 // add puts the word to the dictionary
 func (d *dictionary) add(word string) (uint32, error) {
-	d.mtx.Lock()
-	defer d.mtx.Unlock()
-
 	id := d.nextID()
 	d.ids[word] = id
 
@@ -79,9 +67,6 @@ func (d *dictionary) add(word string) (uint32, error) {
 
 // inc increase word occurence counter
 func (d *dictionary) inc(id uint32) {
-	d.mtx.Lock()
-	defer d.mtx.Unlock()
-
 	_, ok := d.counts[id]
 	if !ok {
 		return
@@ -94,16 +79,13 @@ type match struct {
 	Score float64
 }
 
-func (d *dictionary) Find(word string, n int) []match {
-	d.mtx.RLock()
-	defer d.mtx.RUnlock()
-
+func (d *dictionary) find(word string, n int) []match {
 	if d.maxErrors <= 0 {
 		return nil
 	}
 
 	bm := d.alphabet.encode([]rune(word))
-	candidates := d.getCandidates(word, bm, 1)
+	candidates := d.getCandidates(word, bm)
 	result := calcScores([]rune(word), candidates)
 
 	if len(result) < n {
@@ -119,14 +101,11 @@ type сandidate struct {
 	Count    int
 }
 
-func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32, errCnt int) []сandidate {
-	checked := make(map[uint64]struct{}, d.alphabet.len()*2)
-
+func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32) []сandidate {
 	result := make([]сandidate, 0, 50)
 
 	// "exact match" OR "candidate has all the same letters as the word but in different order"
 	key := sum(bmSrc)
-	checked[key] = struct{}{}
 	ids := d.index[key]
 	for _, id := range ids {
 		docWord, ok := d.words[id]
@@ -151,7 +130,7 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32, errCnt in
 	}
 
 	// @todo perform phonetic analysis with early termination here
-	for bm := range d.computeCandidateBitmaps(word, bmSrc) {
+	for bm := range d.computeCandidateBitmaps(bmSrc) {
 		ids := d.index[bm]
 		for _, id := range ids {
 			docWord, ok := d.words[id]
@@ -174,30 +153,34 @@ func (d *dictionary) getCandidates(word string, bmSrc bitmap.Bitmap32, errCnt in
 	return result
 }
 
-func (d *dictionary) computeCandidateBitmaps(word string, bmSrc bitmap.Bitmap32) map[uint64]struct{} {
+func (d *dictionary) computeCandidateBitmaps(bmSrc bitmap.Bitmap32) map[uint64]struct{} {
 	bitmaps := make(map[uint64]struct{}, d.alphabet.len()*5)
+	bmSrc = bmSrc.Clone()
 
+	var i, j uint32
 	// swap one bit
-	for i := 0; i < d.alphabet.len(); i++ {
-		bit := uint32(i)
-		bmCandidate := bmSrc.Clone()
-		bmCandidate.Xor(bit)
+	for i = 0; i < uint32(d.alphabet.len()); i++ {
+		bmSrc.Xor(i)
 
 		// swap one more bit to be able to fix:
 		// - two deletions ("rang" => "orange")
 		// - replacements ("problam" => "problem")
-		for j := 0; j < d.alphabet.len(); j++ {
-			bit := uint32(j)
-			bmCandidate := bmCandidate.Clone()
-			bmCandidate.Xor(bit)
-			key := sum(bmCandidate)
+		for j = 0; j < uint32(d.alphabet.len()); j++ {
+			if i == j {
+				continue
+			}
+
+			bmSrc.Xor(j)
+			key := sum(bmSrc)
+			bmSrc.Xor(j) // return back the changed bit
 			if len(d.index[key]) == 0 {
 				continue
 			}
 			bitmaps[key] = struct{}{}
 		}
 
-		key := sum(bmCandidate)
+		key := sum(bmSrc)
+		bmSrc.Xor(i) // return back the changed bit
 		if len(d.index[key]) == 0 {
 			continue
 		}
@@ -249,9 +232,6 @@ type dictData struct {
 }
 
 func (d *dictionary) MarshalBinary() ([]byte, error) {
-	d.mtx.Lock()
-	defer d.mtx.Unlock()
-
 	data := &dictData{
 		Alphabet:  d.alphabet,
 		IDs:       d.ids,
@@ -271,9 +251,6 @@ func (d *dictionary) MarshalBinary() ([]byte, error) {
 }
 
 func (d *dictionary) UnmarshalBinary(data []byte) error {
-	d.mtx.Lock()
-	defer d.mtx.Unlock()
-
 	dictData := &dictData{}
 	err := gob.NewDecoder(bytes.NewBuffer(data)).Decode(dictData)
 	if err != nil {
