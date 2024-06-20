@@ -18,12 +18,16 @@ Yet another spellchecker written in go.
 ## Installation
 
 ```
-$ go get -v github.com/f1monkey/spellchecker
+go get -v github.com/f1monkey/spellchecker
 ```
 
 ## Usage
 
+
+### Quick start
+
 ```go
+
 func main() {
 	// Create new instance
 	sc, err := spellchecker.New(
@@ -41,7 +45,7 @@ func main() {
 	}
 	sc.AddFrom(in)
 
-	// Add some more words
+	// Add some words
 	sc.Add("lock", "stock", "and", "two", "smoking", "barrels")
 
 	// Check if a word is correct
@@ -61,6 +65,12 @@ func main() {
 		panic(err)
 	}
 	fmt.Println(matches) // [range, orange]
+```
+
+### Save/load
+
+```go
+	sc, err := spellchecker.New("abc")
 
 	// Save data to any io.Writer
 	out, err := os.Create("data/out.bin")
@@ -78,8 +88,35 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-}
 ```
+
+### Custom score function
+
+You can provide a custom score function if you need to.
+
+```go
+	var scoreFunc spellchecker.ScoreFunc = func(src, candidate []rune, distance, cnt int) float64 {
+		return 1.0 // return constant score
+	}
+
+	sc, err := spellchecker.New("abc", spellchecker.WithScoreFunc(scoreFunc))
+	if err != nil {
+		// handle err
+	}
+
+	// after you load spellchecker from file
+	// you will need to provide the function again:
+	sc, err = spellchecker.Load(inFile)
+	if err != nil {
+		// handle err
+	}
+
+	err = sc.WithOpts(spellchecker.WithScoreFunc(scoreFunc))
+	if err != nil {
+		// handle err
+	}
+```
+
 
 ## Benchmarks
 
