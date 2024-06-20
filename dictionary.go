@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding"
 	"encoding/gob"
-	"math"
 	"sort"
 	"sync/atomic"
 
 	"github.com/agnivade/levenshtein"
 	"github.com/f1monkey/bitmap"
 )
+
+type scoreFunc func(src []rune, candidate []rune, distance int, cnt int) float64
 
 type dictionary struct {
 	maxErrors int
@@ -22,9 +23,11 @@ type dictionary struct {
 	counts map[uint32]int
 
 	index map[uint64][]uint32
+
+	scoreFunc scoreFunc
 }
 
-func newDictionary(ab string, maxErrors int) (*dictionary, error) {
+func newDictionary(ab string, scoreFunc scoreFunc, maxErrors int) (*dictionary, error) {
 	alphabet, err := newAlphabet(ab)
 	if err != nil {
 		return nil, err
@@ -38,6 +41,7 @@ func newDictionary(ab string, maxErrors int) (*dictionary, error) {
 		words:     make(map[uint32]string),
 		counts:    make(map[uint32]int),
 		index:     make(map[uint64][]uint32),
+		scoreFunc: scoreFunc,
 	}, nil
 }
 
@@ -111,7 +115,7 @@ func (d *dictionary) getCandidates(word string, max int) []match {
 		}
 		result.Push(match{
 			Value: docWord,
-			Score: calcScore(wordRunes, []rune(docWord), distance, d.counts[id]),
+			Score: d.scoreFunc(wordRunes, []rune(docWord), distance, d.counts[id]),
 		})
 	}
 	// the most common mistake is a transposition of letters.
@@ -135,7 +139,7 @@ func (d *dictionary) getCandidates(word string, max int) []match {
 			}
 			result.Push(match{
 				Value: docWord,
-				Score: calcScore(wordRunes, []rune(docWord), distance, d.counts[id]),
+				Score: d.scoreFunc(wordRunes, []rune(docWord), distance, d.counts[id]),
 			})
 		}
 	}
@@ -178,20 +182,6 @@ func (d *dictionary) computeCandidateBitmaps(bmSrc bitmap.Bitmap32) map[uint64]s
 	}
 
 	return bitmaps
-}
-
-func calcScore(src []rune, candidate []rune, distance int, cnt int) float64 {
-	mult := math.Log1p(float64(cnt))
-	// if first letters are the same, increase score
-	if src[0] == candidate[0] {
-		mult *= 1.5
-		// if second letters are the same too, increase score even more
-		if len(src) > 1 && len(candidate) > 1 && src[1] == candidate[1] {
-			mult *= 1.5
-		}
-	}
-
-	return 1 / (1 + float64(distance*distance)) * mult
 }
 
 var _ encoding.BinaryMarshaler = (*dictionary)(nil)
@@ -240,6 +230,7 @@ func (d *dictionary) UnmarshalBinary(data []byte) error {
 	d.words = dictData.Words
 	d.index = dictData.Index
 	d.maxErrors = dictData.MaxErrors
+	d.scoreFunc = defaultScorefunc
 
 	var max uint32
 	for _, id := range d.ids {
