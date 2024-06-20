@@ -4,37 +4,40 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"math"
 	"sync"
 )
 
 const DefaultMaxErrors = 2
 
 // OptionFunc option setter
-type OptionFunc func(m *Spellchecker) error
+type OptionFunc func(s *Spellchecker) error
 
 type Spellchecker struct {
 	mtx sync.RWMutex
 
 	dict      *dictionary
 	splitter  bufio.SplitFunc
+	scoreFunc scoreFunc
 	maxErrors int
 }
 
 func New(alphabet string, opts ...OptionFunc) (*Spellchecker, error) {
 	result := &Spellchecker{
 		maxErrors: DefaultMaxErrors,
+		scoreFunc: defaultScorefunc,
 	}
+	dict, err := newDictionary(alphabet, result.scoreFunc, result.maxErrors)
+	if err != nil {
+		return nil, err
+	}
+	result.dict = dict
+
 	for _, o := range opts {
 		if err := o(result); err != nil {
 			return nil, err
 		}
 	}
-
-	dict, err := newDictionary(alphabet, result.maxErrors)
-	if err != nil {
-		return nil, err
-	}
-	result.dict = dict
 
 	return result, nil
 }
@@ -151,8 +154,32 @@ func WithSplitter(f bufio.SplitFunc) OptionFunc {
 // WithMaxErrors set maxErrors, which is a max diff in bits betweeen the "search word" and a "dictionary word".
 // i.e. one simple symbol replacement (problam => problem ) is a two-bit difference
 func WithMaxErrors(maxErrors int) OptionFunc {
-	return func(m *Spellchecker) error {
-		m.maxErrors = maxErrors
+	return func(s *Spellchecker) error {
+		s.maxErrors = maxErrors
 		return nil
 	}
+}
+
+type ScoreFunc = scoreFunc
+
+// WithScoreFunc specify a function that will be used for scoring
+func WithScoreFunc(f ScoreFunc) OptionFunc {
+	return func(s *Spellchecker) error {
+		s.dict.scoreFunc = f
+		return nil
+	}
+}
+
+var defaultScorefunc scoreFunc = func(src, candidate []rune, distance, cnt int) float64 {
+	mult := math.Log1p(float64(cnt))
+	// if first letters are the same, increase score
+	if src[0] == candidate[0] {
+		mult *= 1.5
+		// if second letters are the same too, increase score even more
+		if len(src) > 1 && len(candidate) > 1 && src[1] == candidate[1] {
+			mult *= 1.5
+		}
+	}
+
+	return 1 / (1 + float64(distance*distance)) * mult
 }
