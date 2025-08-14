@@ -73,11 +73,26 @@ func (m *Spellchecker) Add(words ...string) {
 
 	for _, word := range words {
 		if id := m.dict.id(word); id > 0 {
-			m.dict.inc(id)
+			m.dict.inc(id, 1)
 			continue
 		}
 
-		m.dict.add(word)
+		m.dict.add(word, 1)
+	}
+}
+
+// AddWeight adds provided words to dictionary with a custom weight
+func (m *Spellchecker) AddWeight(weight uint, words ...string) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	for _, word := range words {
+		if id := m.dict.id(word); id > 0 {
+			m.dict.inc(id, weight)
+			continue
+		}
+
+		m.dict.add(word, weight)
 	}
 }
 
@@ -129,6 +144,26 @@ func (s *Spellchecker) Suggest(word string, n int) ([]string, error) {
 	return result, nil
 }
 
+type SuggestionResult struct {
+	ExactMatch  bool
+	Suggestions []Match
+}
+
+// SuggestScore find top n suggestions for the word.
+// Returns spellchecker scores along with words
+func (s *Spellchecker) SuggestScore(word string, n int) SuggestionResult {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+
+	if s.dict.has(word) {
+		return SuggestionResult{ExactMatch: true}
+	}
+
+	return SuggestionResult{
+		Suggestions: s.dict.find(word, n),
+	}
+}
+
 // WithOpt set spellchecker options
 func (s *Spellchecker) WithOpts(opts ...OptionFunc) error {
 	s.mtx.Lock()
@@ -170,7 +205,7 @@ func WithScoreFunc(f ScoreFunc) OptionFunc {
 	}
 }
 
-var defaultScorefunc scoreFunc = func(src, candidate []rune, distance, cnt int) float64 {
+var defaultScorefunc scoreFunc = func(src, candidate []rune, distance int, cnt uint) float64 {
 	mult := math.Log1p(float64(cnt))
 	// if first letters are the same, increase score
 	if src[0] == candidate[0] {

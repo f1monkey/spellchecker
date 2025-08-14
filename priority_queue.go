@@ -4,14 +4,14 @@ import "container/heap"
 
 // priorityQueue implements heap.Interface and holds matches.
 type priorityQueue struct {
-	items    []match
+	items    []Match
 	capacity int
 }
 
 // newPriorityQueue initializes a new priorityQueue with a given capacity
 func newPriorityQueue(capacity int) *priorityQueue {
 	return &priorityQueue{
-		items:    make([]match, 0, capacity),
+		items:    make([]Match, 0, capacity),
 		capacity: capacity,
 	}
 }
@@ -27,7 +27,7 @@ func (pq priorityQueue) Swap(i, j int) {
 }
 
 func (pq *priorityQueue) Push(x interface{}) {
-	item := x.(match)
+	item := x.(Match)
 	if len(pq.items) < pq.capacity {
 		pq.items = append(pq.items, item)
 		heap.Fix(pq, len(pq.items)-1)

@@ -27,18 +27,18 @@ func Test_dictionary_add(t *testing.T) {
 		dict, err := newDictionary(DefaultAlphabet, defaultScorefunc, DefaultMaxErrors)
 		require.NoError(t, err)
 
-		id, err := dict.add("qwe")
+		id, err := dict.add("qwe", 1)
 		require.NoError(t, err)
 		require.Equal(t, uint32(1), id)
-		require.Equal(t, 1, dict.counts[id])
+		require.Equal(t, uint(1), dict.counts[id])
 		require.Equal(t, "qwe", dict.words[id])
 		require.Equal(t, 1, len(dict.ids))
 		require.Len(t, dict.index, 1)
 
-		id, err = dict.add("asd")
+		id, err = dict.add("asd", 2)
 		require.NoError(t, err)
 		require.Equal(t, uint32(2), id)
-		require.Equal(t, 1, dict.counts[id])
+		require.Equal(t, uint(2), dict.counts[id])
 		require.Equal(t, "asd", dict.words[id])
 		require.Equal(t, 2, len(dict.ids))
 		require.Len(t, dict.index, 2)
@@ -53,10 +53,10 @@ func Test_Dictionary_Inc(t *testing.T) {
 		dict.counts[1] = 0
 		require.NoError(t, err)
 
-		require.Equal(t, 0, dict.counts[1])
-		require.Equal(t, 0, dict.counts[2])
-		dict.inc(1)
-		require.Equal(t, 1, dict.counts[1])
-		require.Equal(t, 0, dict.counts[2])
+		require.Equal(t, uint(0), dict.counts[1])
+		require.Equal(t, uint(0), dict.counts[2])
+		dict.inc(1, 100)
+		require.Equal(t, uint(100), dict.counts[1])
+		require.Equal(t, uint(0), dict.counts[2])
 	})
 }

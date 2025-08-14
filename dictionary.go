@@ -11,7 +11,7 @@ import (
 	"github.com/f1monkey/bitmap"
 )
 
-type scoreFunc func(src []rune, candidate []rune, distance int, cnt int) float64
+type scoreFunc func(src []rune, candidate []rune, distance int, cnt uint) float64
 
 type dictionary struct {
 	maxErrors int
@@ -20,7 +20,7 @@ type dictionary struct {
 
 	words  map[uint32]string
 	ids    map[string]uint32
-	counts map[uint32]int
+	counts map[uint32]uint
 
 	index map[uint64][]uint32
 
@@ -39,7 +39,7 @@ func newDictionary(ab string, scoreFunc scoreFunc, maxErrors int) (*dictionary, 
 		nextID:    idSeq(0),
 		ids:       make(map[string]uint32),
 		words:     make(map[uint32]string),
-		counts:    make(map[uint32]int),
+		counts:    make(map[uint32]uint),
 		index:     make(map[uint64][]uint32),
 		scoreFunc: scoreFunc,
 	}, nil
@@ -56,12 +56,12 @@ func (d *dictionary) has(word string) bool {
 }
 
 // add puts the word to the dictionary
-func (d *dictionary) add(word string) (uint32, error) {
+func (d *dictionary) add(word string, n uint) (uint32, error) {
 	id := d.nextID()
 	d.ids[word] = id
 
 	runes := []rune(word)
-	d.counts[id] = 1
+	d.counts[id] = n
 	d.words[id] = word
 	key := sum(d.alphabet.encode(runes))
 	d.index[key] = append(d.index[key], id)
@@ -70,20 +70,20 @@ func (d *dictionary) add(word string) (uint32, error) {
 }
 
 // inc increase word occurence counter
-func (d *dictionary) inc(id uint32) {
+func (d *dictionary) inc(id uint32, n uint) {
 	_, ok := d.counts[id]
 	if !ok {
 		return
 	}
-	d.counts[id]++
+	d.counts[id] += n
 }
 
-type match struct {
+type Match struct {
 	Value string
 	Score float64
 }
 
-func (d *dictionary) find(word string, n int) []match {
+func (d *dictionary) find(word string, n int) []Match {
 	if d.maxErrors <= 0 {
 		return nil
 	}
@@ -94,7 +94,7 @@ func (d *dictionary) find(word string, n int) []match {
 	return candidates
 }
 
-func (d *dictionary) getCandidates(word string, max int) []match {
+func (d *dictionary) getCandidates(word string, max int) []Match {
 	result := newPriorityQueue(max)
 
 	wordRunes := []rune(word)
@@ -113,7 +113,7 @@ func (d *dictionary) getCandidates(word string, max int) []match {
 		if distance > d.maxErrors {
 			continue
 		}
-		result.Push(match{
+		result.Push(Match{
 			Value: docWord,
 			Score: d.scoreFunc(wordRunes, []rune(docWord), distance, d.counts[id]),
 		})
@@ -137,7 +137,7 @@ func (d *dictionary) getCandidates(word string, max int) []match {
 			if distance > d.maxErrors {
 				continue
 			}
-			result.Push(match{
+			result.Push(Match{
 				Value: docWord,
 				Score: d.scoreFunc(wordRunes, []rune(docWord), distance, d.counts[id]),
 			})
@@ -191,7 +191,7 @@ type dictData struct {
 	Alphabet alphabet
 	IDs      map[string]uint32
 	Words    map[uint32]string
-	Counts   map[uint32]int
+	Counts   map[uint32]uint
 
 	Index map[uint64][]uint32
 

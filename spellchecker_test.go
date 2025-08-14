@@ -242,3 +242,28 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"orange", "range"}, result)
 }
+
+func Test_Spellchecker_SuggestScore(t *testing.T) {
+	t.Run("fix", func(t *testing.T) {
+		s := newSampleSpellchecker()
+		result := s.SuggestScore("arang", 5)
+		require.Equal(t, SuggestionResult{
+			Suggestions: []Match{
+				{Value: "orange", Score: 0.2772588722239781},
+				{Value: "range", Score: 0.13862943611198905},
+			},
+		}, result)
+	})
+
+	t.Run("valid word", func(t *testing.T) {
+		s := newSampleSpellchecker()
+		result := s.SuggestScore("orange", 5)
+		require.Equal(t, SuggestionResult{ExactMatch: true}, result)
+	})
+
+	t.Run("unknown word", func(t *testing.T) {
+		s := newSampleSpellchecker()
+		result := s.SuggestScore("qwerty", 5)
+		require.Equal(t, SuggestionResult{Suggestions: []Match{}}, result)
+	})
+}
