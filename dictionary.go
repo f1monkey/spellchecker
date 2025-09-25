@@ -100,49 +100,15 @@ func (d *dictionary) getCandidates(word string, max int) []Match {
 	wordRunes := []rune(word)
 	bmSrc := d.alphabet.encode([]rune(wordRunes))
 
-	// "exact match" OR "candidate has all the same letters as the word but in different order"
-	key := sum(bmSrc)
-	ids := d.index[key]
-	for _, id := range ids {
-		docWord, ok := d.words[id]
-		if !ok {
-			continue
-		}
-
-		distance, _, _ := levenshtein.Calculate(wordRunes, []rune(docWord), 0, 1, 1, 1)
-		if distance > d.maxErrors {
-			continue
-		}
-		result.Push(Match{
-			Value: docWord,
-			Score: d.scoreFunc(wordRunes, []rune(docWord), distance, d.counts[id]),
-		})
-	}
-
-	// the most common mistake is a transposition of letters.
-	// so if we found one here, we do early termination
+	// check for transposition or exact match and do early termination if found
+	// (the most common mistake is a transposition of letters)
+	d.fillWithCandidates(result, wordRunes, sum(bmSrc))
 	if result.Len() != 0 {
 		return result.items
 	}
 
 	for bm := range d.computeCandidateBitmaps(bmSrc, d.maxErrors) {
-		ids := d.index[bm]
-		for _, id := range ids {
-			docWord, ok := d.words[id]
-			if !ok {
-				continue
-			}
-
-			distance, _, _ := levenshtein.Calculate(wordRunes, []rune(docWord), 0, 1, 1, 1)
-			if distance > d.maxErrors {
-				continue
-			}
-
-			result.Push(Match{
-				Value: docWord,
-				Score: d.scoreFunc(wordRunes, []rune(docWord), distance, d.counts[id]),
-			})
-		}
+		d.fillWithCandidates(result, wordRunes, bm)
 	}
 
 	return result.items
@@ -172,6 +138,26 @@ func (d *dictionary) computeCandidateBitmaps(bmSrc bitmap.Bitmap32, maxFlips int
 	dfs(bmSrc.Clone(), 0, 0)
 
 	return bitmaps
+}
+
+func (d *dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune, bm uint64) {
+	ids := d.index[bm]
+	for _, id := range ids {
+		docWord, ok := d.words[id]
+		if !ok {
+			continue
+		}
+
+		distance, _, _ := levenshtein.Calculate(wordRunes, []rune(docWord), 0, 1, 1, 1)
+		if distance > d.maxErrors {
+			continue
+		}
+
+		result.Push(Match{
+			Value: docWord,
+			Score: d.scoreFunc(wordRunes, []rune(docWord), distance, d.counts[id]),
+		})
+	}
 }
 
 var _ encoding.BinaryMarshaler = (*dictionary)(nil)
