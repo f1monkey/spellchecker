@@ -118,14 +118,14 @@ func (d *dictionary) getCandidates(word string, max int) []Match {
 			Score: d.scoreFunc(wordRunes, []rune(docWord), distance, d.counts[id]),
 		})
 	}
+
 	// the most common mistake is a transposition of letters.
 	// so if we found one here, we do early termination
 	if result.Len() != 0 {
 		return result.items
 	}
 
-	// @todo perform phonetic analysis with early termination here
-	for bm := range d.computeCandidateBitmaps(bmSrc) {
+	for bm := range d.computeCandidateBitmaps(bmSrc, d.maxErrors) {
 		ids := d.index[bm]
 		for _, id := range ids {
 			docWord, ok := d.words[id]
@@ -137,6 +137,7 @@ func (d *dictionary) getCandidates(word string, max int) []Match {
 			if distance > d.maxErrors {
 				continue
 			}
+
 			result.Push(Match{
 				Value: docWord,
 				Score: d.scoreFunc(wordRunes, []rune(docWord), distance, d.counts[id]),
@@ -147,39 +148,28 @@ func (d *dictionary) getCandidates(word string, max int) []Match {
 	return result.items
 }
 
-func (d *dictionary) computeCandidateBitmaps(bmSrc bitmap.Bitmap32) map[uint64]struct{} {
-	bitmaps := make(map[uint64]struct{}, d.alphabet.len()*5)
-	bmSrc = bmSrc.Clone()
+func (d *dictionary) computeCandidateBitmaps(bmSrc bitmap.Bitmap32, maxFlips int) map[uint64]struct{} {
+	bitmaps := make(map[uint64]struct{}, d.alphabet.len()*maxFlips*2)
 
-	var i, j uint32
-	// swap one bit
-	for i = 0; i < uint32(d.alphabet.len()); i++ {
-		bmSrc.Xor(i)
-
-		// swap one more bit to be able to fix:
-		// - two deletions ("rang" => "orange")
-		// - replacements ("problam" => "problem")
-		for j = 0; j < uint32(d.alphabet.len()); j++ {
-			if i == j {
-				continue
-			}
-
-			bmSrc.Xor(j)
-			key := sum(bmSrc)
-			bmSrc.Xor(j) // return back the changed bit
-			if len(d.index[key]) == 0 {
-				continue
-			}
+	var dfs func(bm bitmap.Bitmap32, level, start int)
+	dfs = func(bm bitmap.Bitmap32, level, start int) {
+		key := sum(bm)
+		if len(d.index[key]) > 0 {
 			bitmaps[key] = struct{}{}
 		}
 
-		key := sum(bmSrc)
-		bmSrc.Xor(i) // return back the changed bit
-		if len(d.index[key]) == 0 {
-			continue
+		if level == maxFlips {
+			return
 		}
-		bitmaps[key] = struct{}{}
+
+		for i := start; i < d.alphabet.len(); i++ {
+			bm.Xor(uint32(i)) // change one bit
+			dfs(bm, level+1, i+1)
+			bm.Xor(uint32(i)) // return back the changed bit
+		}
 	}
+
+	dfs(bmSrc.Clone(), 0, 0)
 
 	return bitmaps
 }
