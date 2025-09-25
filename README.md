@@ -132,15 +132,15 @@ Tests are based on data from [Peter Norvig's article about spelling correction](
 #### [Test set 1](http://norvig.com/spell-testset1.txt):
 
 ```
-Running tool: /usr/local/go/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norvig1$ github.com/f1monkey/spellchecker
+Running tool: /usr/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norvig1$ github.com/f1monkey/spellchecker -count=1
 
 goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker
 cpu: 13th Gen Intel(R) Core(TM) i9-13980HX
-Benchmark_Norvig1-32    	      67	  17968628 ns/op	        74.07 success_percent	       200.0 success_words	       270.0 total_words	 1494030 B/op	    4294 allocs/op
+Benchmark_Norvig1-32    	     363	   3779683 ns/op	        74.07 success_percent	       200.0 success_words	       270.0 total_words	 1130706 B/op	   15577 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	2.847s
+ok  	github.com/f1monkey/spellchecker	4.197s
 ```
 
 #### [Test set 2](http://norvig.com/spell-testset2.txt):
@@ -152,7 +152,7 @@ goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker
 cpu: 13th Gen Intel(R) Core(TM) i9-13980HX
-Benchmark_Norvig2-32    	      44	  26379189 ns/op	        69.00 success_percent	       276.0 success_words	       400.0 total_words	 2103494 B/op	    5378 allocs/op
+Benchmark_Norvig2-32    	     224	   5279563 ns/op	        70.00 success_percent	       280.0 success_words	       400.0 total_words	 1724349 B/op	   22073 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	1.563s
+ok  	github.com/f1monkey/spellchecker	4.246s
 ```

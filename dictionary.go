@@ -7,7 +7,7 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"github.com/agnivade/levenshtein"
+	"github.com/agext/levenshtein"
 	"github.com/f1monkey/bitmap"
 )
 
@@ -109,7 +109,7 @@ func (d *dictionary) getCandidates(word string, max int) []Match {
 			continue
 		}
 
-		distance := levenshtein.ComputeDistance(word, docWord)
+		distance, _, _ := levenshtein.Calculate(wordRunes, []rune(docWord), 0, 1, 1, 1)
 		if distance > d.maxErrors {
 			continue
 		}
@@ -133,7 +133,7 @@ func (d *dictionary) getCandidates(word string, max int) []Match {
 				continue
 			}
 
-			distance := levenshtein.ComputeDistance(word, docWord)
+			distance, _, _ := levenshtein.Calculate(wordRunes, []rune(docWord), 0, 1, 1, 1)
 			if distance > d.maxErrors {
 				continue
 			}
