@@ -35,7 +35,6 @@ func main() {
 	// Create a new instance
 	sc, err := spellchecker.New(
 		"abcdefghijklmnopqrstuvwxyz1234567890", // allowed symbols, other symbols will be ignored
-		spellchecker.WithMaxErrors(2) 			// see options.go
 	)
 	if err != nil {
 		panic(err)
@@ -49,28 +48,30 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	sc.AddFrom(weight, in)
+
+	sc.AddFrom(&spellchecker.AddOptions{Weight: weight}, in)
+	// OR
+	sc.AddFrom(nil, in)
 
 	// Add words manually
-	sc.Add(weight, "lock", "stock", "and", "two", "smoking", "barrels")
+	sc.Add(nil, "lock", "stock", "and", "two", "smoking", "barrels")
 
 	// Check if a word is valid
 	result := sc.IsCorrect("coffee")
 	fmt.Println(result) // true
 
 	// Correct a single word
-	fixed, err := sc.Fix("awepon")
-	if err != nil && !errors.Is(err, spellchecker.ErrUnknownWord) {
-		panic(err)
-	}
+	fixed, isCorrect := sc.Fix(nil, "awepon")
+	fmt.Println(isCorrect) // false
 	fmt.Println(fixed) // weapon
 
 	// Find up to 10 suggestions for a word
-	matches, err := sc.Suggest("rang", 10)
-	if err != nil && !errors.Is(err, spellchecker.ErrUnknownWord) {
-		panic(err)
-	}
+	matches := sc.Suggest(nil, "rang", 10)
 	fmt.Println(matches) // [range, orange]
+
+	if len(os.Args) < 2 {
+		log.Fatal("dict path must be provided")
+	}
 ```
 
 ### Options
@@ -116,17 +117,7 @@ You can provide a custom scoring function if needed:
 		// handle err
 	}
 
-	// After loading a spellchecker from a file,
-	// you need to set the function again:
-	sc, err = spellchecker.Load(inFile)
-	if err != nil {
-		// handle err
-	}
-
-	err = sc.WithOpts(spellchecker.WithFilterFunc(fn))
-	if err != nil {
-		// handle err
-	}
+	sc.Fix(fn, "word")
 ```
 
 

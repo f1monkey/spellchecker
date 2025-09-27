@@ -11,9 +11,8 @@ import (
 )
 
 type dictionary struct {
-	maxErrors int
-	alphabet  alphabet
-	nextID    func() uint32
+	alphabet alphabet
+	nextID   func() uint32
 
 	words  map[uint32][]rune
 	ids    map[string]uint32
@@ -22,20 +21,19 @@ type dictionary struct {
 	index map[uint64][]uint32
 }
 
-func newDictionary(ab string, maxErrors int) (*dictionary, error) {
+func newDictionary(ab string) (*dictionary, error) {
 	alphabet, err := newAlphabet(ab)
 	if err != nil {
 		return nil, err
 	}
 
 	return &dictionary{
-		maxErrors: maxErrors,
-		alphabet:  alphabet,
-		nextID:    idSeq(0),
-		ids:       make(map[string]uint32),
-		words:     make(map[uint32][]rune),
-		counts:    make(map[uint32]uint),
-		index:     make(map[uint64][]uint32),
+		alphabet: alphabet,
+		nextID:   idSeq(0),
+		ids:      make(map[string]uint32),
+		words:    make(map[uint32][]rune),
+		counts:   make(map[uint32]uint),
+		index:    make(map[uint64][]uint32),
 	}, nil
 }
 
@@ -78,8 +76,8 @@ type Match struct {
 	Score float64
 }
 
-func (d *dictionary) find(word string, n int, fn FilterFunc) []Match {
-	if d.maxErrors <= 0 {
+func (d *dictionary) find(word string, n int, maxErrors int, fn FilterFunc) []Match {
+	if maxErrors <= 0 {
 		return nil
 	}
 
@@ -96,7 +94,7 @@ func (d *dictionary) find(word string, n int, fn FilterFunc) []Match {
 	}
 
 	bitmaps := bitmapsPool.Get().(map[uint64]struct{})
-	d.computeCandidateBitmaps(bitmaps, bmSrc, d.maxErrors)
+	d.computeCandidateBitmaps(bitmaps, bmSrc, maxErrors)
 	for bm := range bitmaps {
 		d.fillWithCandidates(result, wordRunes, bm, fn)
 	}
@@ -152,25 +150,21 @@ var _ encoding.BinaryMarshaler = (*dictionary)(nil)
 var _ encoding.BinaryUnmarshaler = (*dictionary)(nil)
 
 type dictData struct {
-	Alphabet  alphabet
-	IDs       map[string]uint32
-	Words     map[uint32]string
-	WordRunes map[uint32][]rune
-	Counts    map[uint32]uint
+	Alphabet alphabet
+	IDs      map[string]uint32
+	Words    map[uint32][]rune
+	Counts   map[uint32]uint
 
 	Index map[uint64][]uint32
-
-	MaxErrors int
 }
 
 func (d *dictionary) MarshalBinary() ([]byte, error) {
 	data := &dictData{
-		Alphabet:  d.alphabet,
-		IDs:       d.ids,
-		WordRunes: d.words,
-		Counts:    d.counts,
-		Index:     d.index,
-		MaxErrors: d.maxErrors,
+		Alphabet: d.alphabet,
+		IDs:      d.ids,
+		Words:    d.words,
+		Counts:   d.counts,
+		Index:    d.index,
 	}
 
 	buf := &bytes.Buffer{}
@@ -192,20 +186,8 @@ func (d *dictionary) UnmarshalBinary(data []byte) error {
 	d.alphabet = dictData.Alphabet
 	d.ids = dictData.IDs
 	d.counts = dictData.Counts
-
-	// compatibility with previous versions
-	if len(dictData.Words) > 0 {
-		wordRunes := make(map[uint32][]rune, len(dictData.Words))
-		for k, v := range dictData.Words {
-			wordRunes[k] = []rune(v)
-		}
-		d.words = wordRunes
-	} else {
-		d.words = dictData.WordRunes
-	}
-
 	d.index = dictData.Index
-	d.maxErrors = dictData.MaxErrors
+	d.words = dictData.Words
 
 	var max uint32
 	for _, id := range d.ids {

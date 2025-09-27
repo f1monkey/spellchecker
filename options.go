@@ -2,61 +2,61 @@ package spellchecker
 
 import (
 	"bufio"
+	"bytes"
 	"math"
+	"regexp"
 
 	"github.com/agext/levenshtein"
 )
 
-// WithOpt set spellchecker options
-func (s *Spellchecker) WithOpts(opts ...OptionFunc) error {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+const DefaultMaxErrors = 2
 
-	for _, o := range opts {
-		if err := o(s); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// WithSplitter set splitter func for AddFrom() reader
-func WithSplitter(f bufio.SplitFunc) OptionFunc {
-	return func(s *Spellchecker) error {
-		s.splitter = f
-		return nil
-	}
-}
-
-// WithMaxErrors sets maxErrors — the maximum allowed difference in bits
-// between the "search word" and a "dictionary word".
-// - deletion is a 1-bit change (proble → problem)
-// - insertion is a 1-bit change (problemm → problem)
-// - substitution is a 2-bit change (problam → problem)
-// - transposition is a 0-bit change (problme → problem)
-//
-// It is not recommended to set this value greater than 2,
-// as it can significantly affect performance.
-func WithMaxErrors(maxErrors int) OptionFunc {
-	return func(s *Spellchecker) error {
-		s.maxErrors = maxErrors
-
-		return nil
-	}
-}
-
-// FilterFunc compares the source word with a candidate word.
-// It returns the candidate's score and a boolean flag.
-// If the flag is false, the candidate will be completely filtered out.
 type FilterFunc func(src, candidate []rune, count uint) (float64, bool)
 
-// WithFilterFunc set custom scoring function
-func WithFilterFunc(f FilterFunc) OptionFunc {
-	return func(s *Spellchecker) error {
-		s.filterFunc = f
-		return nil
+type SearchOptions struct {
+	// MaxErrors — the maximum allowed difference in bits
+	// between the "search word" and a "dictionary word".
+	// - deletion is a 1-bit change (proble → problem)
+	// - insertion is a 1-bit change (problemm → problem)
+	// - substitution is a 2-bit change (problam → problem)
+	// - transposition is a 0-bit change (problme → problem)
+	//
+	// It is not recommended to set this value greater than 2,
+	// as it can significantly affect performance.
+	MaxErrors int
+
+	// FilterFunc compares the source word with a candidate word.
+	// It returns the candidate's score and a boolean flag.
+	// If the flag is false, the candidate will be completely filtered out.
+	FilterFunc FilterFunc
+}
+
+var defaultSearchOptions = &SearchOptions{
+	MaxErrors:  DefaultMaxErrors,
+	FilterFunc: defaultFilterFunc(DefaultMaxErrors),
+}
+
+type AddOptions struct {
+	Weight uint
+	// Splitter is a splitter func for AddFrom() reader
+	Splitter bufio.SplitFunc
+}
+
+var defaultAddOptions = &AddOptions{
+	Weight:   1,
+	Splitter: defaultSplitter,
+}
+
+var wordSymbols = regexp.MustCompile(`[-\pL]+`)
+
+func defaultSplitter(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	advance, token, err = bufio.ScanWords(data, atEOF)
+	if err != nil {
+		return
 	}
+	token = bytes.ToLower(token)
+
+	return advance, wordSymbols.Find(token), nil
 }
 
 func defaultFilterFunc(maxErrors int) FilterFunc {
@@ -70,4 +70,19 @@ func defaultFilterFunc(maxErrors int) FilterFunc {
 
 		return 1 / (1 + float64(distance*distance)) * mult, true
 	}
+}
+
+func applyDefaults(opts *SearchOptions) *SearchOptions {
+	if opts == nil {
+		opts = defaultSearchOptions
+	} else {
+		if opts.MaxErrors == 0 {
+			opts.MaxErrors = DefaultMaxErrors
+		}
+		if opts.FilterFunc == nil {
+			opts.FilterFunc = defaultFilterFunc(opts.MaxErrors)
+		}
+	}
+
+	return opts
 }
