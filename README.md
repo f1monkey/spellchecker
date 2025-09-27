@@ -21,7 +21,7 @@ Yet another spellchecker written in go.
 ## Installation
 
 ```
-go get -v github.com/f1monkey/spellchecker
+go get -v github.com/f1monkey/spellchecker/v2
 ```
 
 ## Usage
@@ -41,15 +41,18 @@ func main() {
 		panic(err)
 	}
 
+	// The weight increases the likelihood that the word will be chosen as a correction.
+	weight := uint(1)
+
 	// Load data from any io.Reader
 	in, err := os.Open("data/sample.txt")
 	if err != nil {
 		panic(err)
 	}
-	sc.AddFrom(in)
+	sc.AddFrom(weight, in)
 
 	// Add words manually
-	sc.Add("lock", "stock", "and", "two", "smoking", "barrels")
+	sc.Add(weight, "lock", "stock", "and", "two", "smoking", "barrels")
 
 	// Check if a word is valid
 	result := sc.IsCorrect("coffee")
@@ -140,9 +143,9 @@ goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker
 cpu: 13th Gen Intel(R) Core(TM) i9-13980HX
-Benchmark_Norvig1-32    	     348	   3385868 ns/op	        74.44 success_percent	       201.0 success_words	       270.0 total_words	  830803 B/op	   15504 allocs/op
+Benchmark_Norvig1-32    	     379	   3099977 ns/op	        74.44 success_percent	       201.0 success_words	       270.0 total_words	  820251 B/op	   15234 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	3.723s
+ok  	github.com/f1monkey/spellchecker	3.740s
 ```
 
 #### [Test set 2](http://norvig.com/spell-testset2.txt):
@@ -154,8 +157,7 @@ goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker
 cpu: 13th Gen Intel(R) Core(TM) i9-13980HX
-Benchmark_Norvig2-32    	     231	   4935406 ns/op	        71.25 success_percent	       285.0 success_words	       400.0 total_words	 1270755 B/op	   21801 allocs/op
+Benchmark_Norvig2-32    	     219	   4916738 ns/op	        71.25 success_percent	       285.0 success_words	       400.0 total_words	 1257491 B/op	   21401 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	4.057s
-
+ok  	github.com/f1monkey/spellchecker	3.919s
 ```

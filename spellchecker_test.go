@@ -3,7 +3,6 @@ package spellchecker
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -47,7 +46,7 @@ func newFullSpellchecker() *Spellchecker {
 		panic(err)
 	}
 
-	err = s.AddFrom(f)
+	err = s.AddFrom(1, f)
 	if err != nil {
 		panic(err)
 	}
@@ -66,7 +65,7 @@ func newSampleSpellchecker() *Spellchecker {
 		panic(err)
 	}
 
-	err = s.AddFrom(f)
+	err = s.AddFrom(1, f)
 	if err != nil {
 		panic(err)
 	}
@@ -171,18 +170,21 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 				}
 
 				b.StartTimer()
-				result, err := m.Suggest(word, 10)
+				result := m.Suggest(word, 10)
 				b.StopTimer()
-				if err != nil && !errors.Is(err, ErrUnknownWord) {
-					fmt.Println(err)
-				}
 
 				if i == 0 {
 					total++
-					if len(result) > 0 && result[0] == item.expected {
+					if result.ExactMatch && word == item.expected {
 						ok++
 						continue
 					}
+
+					if len(result.Suggestions) > 0 && result.Suggestions[0].Value == item.expected {
+						ok++
+						continue
+					}
+
 					// got := ""
 					// if len(result) > 0 {
 					// 	got = result[0]
@@ -235,17 +237,10 @@ func Test_Spellchecker_Fix(t *testing.T) {
 	require.Equal(t, "problem", result)
 }
 
-func Test_Spellchecker_Suggest(t *testing.T) {
-	s := newSampleSpellchecker()
-	result, err := s.Suggest("arang", 5)
-	require.NoError(t, err)
-	require.Equal(t, []string{"orange", "range"}, result)
-}
-
 func Test_Spellchecker_SuggestScore(t *testing.T) {
 	t.Run("fix", func(t *testing.T) {
 		s := newSampleSpellchecker()
-		result := s.SuggestScore("arang", 5)
+		result := s.Suggest("arang", 5)
 		require.Equal(t, SuggestionResult{
 			Suggestions: []Match{
 				{Value: "orange", Score: 0.2772588722239781},
@@ -256,13 +251,13 @@ func Test_Spellchecker_SuggestScore(t *testing.T) {
 
 	t.Run("valid word", func(t *testing.T) {
 		s := newSampleSpellchecker()
-		result := s.SuggestScore("orange", 5)
+		result := s.Suggest("orange", 5)
 		require.Equal(t, SuggestionResult{ExactMatch: true}, result)
 	})
 
 	t.Run("unknown word", func(t *testing.T) {
 		s := newSampleSpellchecker()
-		result := s.SuggestScore("qwerty", 5)
+		result := s.Suggest("qwerty", 5)
 		require.Equal(t, SuggestionResult{Suggestions: []Match{}}, result)
 	})
 }

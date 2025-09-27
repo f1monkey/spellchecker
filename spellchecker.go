@@ -44,7 +44,7 @@ func New(alphabet string, opts ...OptionFunc) (*Spellchecker, error) {
 }
 
 // AddFrom reads input, splits it with spellchecker splitter func and adds words to the dictionary
-func (m *Spellchecker) AddFrom(input io.Reader) error {
+func (m *Spellchecker) AddFrom(weight uint, input io.Reader) error {
 	words := make([]string, 1000)
 	i := 0
 	for item := range readInput(input, m.splitter) {
@@ -53,7 +53,7 @@ func (m *Spellchecker) AddFrom(input io.Reader) error {
 		}
 
 		if i == len(words) {
-			m.Add(words...)
+			m.Add(weight, words...)
 			i = 0
 		}
 		words[i] = item.word
@@ -61,29 +61,14 @@ func (m *Spellchecker) AddFrom(input io.Reader) error {
 	}
 
 	if i > 0 {
-		m.Add(words[:i]...)
+		m.Add(weight, words[:i]...)
 	}
 
 	return nil
 }
 
-// Add adds provided words to the dictionary
-func (m *Spellchecker) Add(words ...string) {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
-
-	for _, word := range words {
-		if id := m.dict.id(word); id > 0 {
-			m.dict.inc(id, 1)
-			continue
-		}
-
-		m.dict.add(word, 1)
-	}
-}
-
-// AddWeight adds provided words to the dictionary with a custom weight
-func (m *Spellchecker) AddWeight(weight uint, words ...string) {
+// Add adds provided words to the dictionary with a custom weight
+func (m *Spellchecker) Add(weight uint, words ...string) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
@@ -123,36 +108,14 @@ func (s *Spellchecker) Fix(word string) (string, error) {
 	return hits[0].Value, nil
 }
 
-// Suggest find top n suggestions for the word
-func (s *Spellchecker) Suggest(word string, n int) ([]string, error) {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-
-	if s.dict.has(word) {
-		return []string{word}, nil
-	}
-
-	hits := s.dict.find(word, n, s.filterFunc)
-	if len(hits) == 0 {
-		return []string{word}, ErrUnknownWord
-	}
-
-	result := make([]string, len(hits))
-	for i, h := range hits {
-		result[i] = h.Value
-	}
-
-	return result, nil
-}
-
 type SuggestionResult struct {
-	ExactMatch  bool
+	ExactMatch  bool // if true, the word is correct
 	Suggestions []Match
 }
 
-// SuggestScore find top n suggestions for the word.
+// Suggest find top n suggestions for the word.
 // Returns spellchecker scores along with words
-func (s *Spellchecker) SuggestScore(word string, n int) SuggestionResult {
+func (s *Spellchecker) Suggest(word string, n int) SuggestionResult {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 
