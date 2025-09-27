@@ -18,7 +18,6 @@ type Spellchecker struct {
 	dict       *dictionary
 	splitter   bufio.SplitFunc
 	filterFunc FilterFunc
-	scoreFunc  ScoreFunc
 	maxErrors  int
 }
 
@@ -32,10 +31,6 @@ func New(alphabet string, opts ...OptionFunc) (*Spellchecker, error) {
 		if err := o(result); err != nil {
 			return nil, err
 		}
-	}
-
-	if result.scoreFunc != nil {
-		result.filterFunc = wrapScoreFunc(result.scoreFunc, result.maxErrors)
 	}
 
 	dict, err := newDictionary(alphabet, result.filterFunc, result.maxErrors)

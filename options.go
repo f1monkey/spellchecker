@@ -18,11 +18,7 @@ func (s *Spellchecker) WithOpts(opts ...OptionFunc) error {
 		}
 	}
 
-	if s.scoreFunc != nil {
-		s.dict.filterFunc = wrapScoreFunc(s.scoreFunc, s.maxErrors)
-	} else {
-		s.dict.filterFunc = s.filterFunc
-	}
+	s.dict.filterFunc = s.filterFunc
 
 	return nil
 }
@@ -65,21 +61,6 @@ func WithFilterFunc(f FilterFunc) OptionFunc {
 	}
 }
 
-// ScoreFunc custom scoring function type
-//
-// Deprecated: use FilterFunc instead
-type ScoreFunc func(src []rune, candidate []rune, distance int, cnt uint) float64
-
-// WithScoreFunc specify a function that will be used for scoring
-//
-// Deprecated: use WithFilterFunc instead
-func WithScoreFunc(f ScoreFunc) OptionFunc {
-	return func(s *Spellchecker) error {
-		s.scoreFunc = f
-		return nil
-	}
-}
-
 func defaultFilterFunc(maxErrors int) FilterFunc {
 	return func(src, candidate []rune, count uint) (float64, bool) {
 		distance, prefixLen, suffixLen := levenshtein.Calculate(src, candidate, 0, 1, 1, 1)
@@ -91,29 +72,4 @@ func defaultFilterFunc(maxErrors int) FilterFunc {
 
 		return 1 / (1 + float64(distance*distance)) * mult, true
 	}
-}
-
-func wrapScoreFunc(f ScoreFunc, maxErrors int) FilterFunc {
-	return func(src, candidate []rune, count uint) (float64, bool) {
-		distance, _, _ := levenshtein.Calculate(src, candidate, 0, 1, 1, 1)
-		if distance > maxErrors {
-			return 0, false
-		}
-
-		return f(src, candidate, distance, count), true
-	}
-}
-
-var defaultScoreFunc ScoreFunc = func(src, candidate []rune, distance int, cnt uint) float64 {
-	mult := math.Log1p(float64(cnt))
-	// if first letters are the same, increase score
-	if src[0] == candidate[0] {
-		mult *= 1.5
-		// if second letters are the same too, increase score even more
-		if len(src) > 1 && len(candidate) > 1 && src[1] == candidate[1] {
-			mult *= 1.5
-		}
-	}
-
-	return 1 / (1 + float64(distance*distance)) * mult
 }

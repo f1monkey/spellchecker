@@ -235,15 +235,6 @@ func Test_Spellchecker_Fix(t *testing.T) {
 	require.Equal(t, "problem", result)
 }
 
-func Test_Spellchecker_Fix_ScoreFunc(t *testing.T) {
-	s := newSampleSpellchecker()
-	s.WithOpts(WithScoreFunc(defaultScoreFunc))
-
-	result, err := s.Fix("problam")
-	require.NoError(t, err)
-	require.Equal(t, "problem", result)
-}
-
 func Test_Spellchecker_Suggest(t *testing.T) {
 	s := newSampleSpellchecker()
 	result, err := s.Suggest("arang", 5)
