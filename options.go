@@ -82,20 +82,12 @@ func WithScoreFunc(f ScoreFunc) OptionFunc {
 
 func defaultFilterFunc(maxErrors int) FilterFunc {
 	return func(src, candidate []rune, count uint) (float64, bool) {
-		distance, _, _ := levenshtein.Calculate(src, candidate, 0, 1, 1, 1)
+		distance, prefixLen, suffixLen := levenshtein.Calculate(src, candidate, 0, 1, 1, 1)
 		if distance > maxErrors {
 			return 0, false
 		}
 
-		mult := math.Log1p(float64(count))
-		// if first letters are the same, increase score
-		if src[0] == candidate[0] {
-			mult *= 1.5
-			// if second letters are the same too, increase score  even more
-			if len(src) > 1 && len(candidate) > 1 && src[1] == candidate[1] {
-				mult *= 1.5
-			}
-		}
+		mult := math.Log1p(float64(count)) * math.Pow(1.5, float64(prefixLen+suffixLen))
 
 		return 1 / (1 + float64(distance*distance)) * mult, true
 	}

@@ -140,9 +140,9 @@ goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker
 cpu: 13th Gen Intel(R) Core(TM) i9-13980HX
-Benchmark_Norvig1-32    	     376	   3160457 ns/op	        74.07 success_percent	       200.0 success_words	       270.0 total_words	  830612 B/op	   15504 allocs/op
+Benchmark_Norvig1-32    	     348	   3385868 ns/op	        74.44 success_percent	       201.0 success_words	       270.0 total_words	  830803 B/op	   15504 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	3.814s
+ok  	github.com/f1monkey/spellchecker	3.723s
 ```
 
 #### [Test set 2](http://norvig.com/spell-testset2.txt):
@@ -154,7 +154,8 @@ goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker
 cpu: 13th Gen Intel(R) Core(TM) i9-13980HX
-Benchmark_Norvig2-32    	     229	   5108390 ns/op	        70.00 success_percent	       280.0 success_words	       400.0 total_words	 1270874 B/op	   21801 allocs/op
+Benchmark_Norvig2-32    	     231	   4935406 ns/op	        71.25 success_percent	       285.0 success_words	       400.0 total_words	 1270755 B/op	   21801 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	4.154s
+ok  	github.com/f1monkey/spellchecker	4.057s
+
 ```
