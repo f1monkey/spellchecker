@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding"
 	"encoding/gob"
-	"sort"
 	"sync/atomic"
 
 	"github.com/f1monkey/bitmap"
@@ -86,14 +85,7 @@ func (d *dictionary) find(word string, n int) []Match {
 		return nil
 	}
 
-	candidates := d.getCandidates(word, n)
-	sort.Slice(candidates, func(i, j int) bool { return candidates[i].Score > candidates[j].Score })
-
-	return candidates
-}
-
-func (d *dictionary) getCandidates(word string, max int) []Match {
-	result := newPriorityQueue(max)
+	result := newPriorityQueue(n)
 
 	wordRunes := []rune(word)
 	bmSrc := d.alphabet.encode(wordRunes)
@@ -102,14 +94,14 @@ func (d *dictionary) getCandidates(word string, max int) []Match {
 	// (the most common mistake is a transposition of letters)
 	d.fillWithCandidates(result, wordRunes, sum(bmSrc))
 	if result.Len() != 0 {
-		return result.items
+		return result.DrainSorted()
 	}
 
 	for bm := range d.computeCandidateBitmaps(bmSrc, d.maxErrors) {
 		d.fillWithCandidates(result, wordRunes, bm)
 	}
 
-	return result.items
+	return result.DrainSorted()
 }
 
 func (d *dictionary) computeCandidateBitmaps(bmSrc bitmap.Bitmap32, maxFlips int) map[uint64]struct{} {
