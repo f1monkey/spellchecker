@@ -21,7 +21,7 @@ Yet another spellchecker written in go.
 ## Installation
 
 ```
-go get -v github.com/f1monkey/spellchecker
+go get -v github.com/f1monkey/spellchecker/v2
 ```
 
 ## Usage
@@ -35,39 +35,43 @@ func main() {
 	// Create a new instance
 	sc, err := spellchecker.New(
 		"abcdefghijklmnopqrstuvwxyz1234567890", // allowed symbols, other symbols will be ignored
-		spellchecker.WithMaxErrors(2) 			// see options.go
 	)
 	if err != nil {
 		panic(err)
 	}
+
+	// The weight increases the likelihood that the word will be chosen as a correction.
+	weight := uint(1)
 
 	// Load data from any io.Reader
 	in, err := os.Open("data/sample.txt")
 	if err != nil {
 		panic(err)
 	}
-	sc.AddFrom(in)
+
+	sc.AddFrom(&spellchecker.AddOptions{Weight: weight}, in)
+	// OR
+	sc.AddFrom(nil, in)
 
 	// Add words manually
-	sc.Add("lock", "stock", "and", "two", "smoking", "barrels")
+	sc.Add(nil, "lock", "stock", "and", "two", "smoking", "barrels")
 
 	// Check if a word is valid
 	result := sc.IsCorrect("coffee")
 	fmt.Println(result) // true
 
 	// Correct a single word
-	fixed, err := sc.Fix("awepon")
-	if err != nil && !errors.Is(err, spellchecker.ErrUnknownWord) {
-		panic(err)
-	}
+	fixed, isCorrect := sc.Fix(nil, "awepon")
+	fmt.Println(isCorrect) // false
 	fmt.Println(fixed) // weapon
 
 	// Find up to 10 suggestions for a word
-	matches, err := sc.Suggest("rang", 10)
-	if err != nil && !errors.Is(err, spellchecker.ErrUnknownWord) {
-		panic(err)
-	}
+	matches := sc.Suggest(nil, "rang", 10)
 	fmt.Println(matches) // [range, orange]
+
+	if len(os.Args) < 2 {
+		log.Fatal("dict path must be provided")
+	}
 ```
 
 ### Options
@@ -113,17 +117,7 @@ You can provide a custom scoring function if needed:
 		// handle err
 	}
 
-	// After loading a spellchecker from a file,
-	// you need to set the function again:
-	sc, err = spellchecker.Load(inFile)
-	if err != nil {
-		// handle err
-	}
-
-	err = sc.WithOpts(spellchecker.WithFilterFunc(fn))
-	if err != nil {
-		// handle err
-	}
+	sc.Fix(fn, "word")
 ```
 
 
@@ -140,9 +134,9 @@ goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker
 cpu: 13th Gen Intel(R) Core(TM) i9-13980HX
-Benchmark_Norvig1-32    	     348	   3385868 ns/op	        74.44 success_percent	       201.0 success_words	       270.0 total_words	  830803 B/op	   15504 allocs/op
+Benchmark_Norvig1-32    	     357	   3305052 ns/op	        74.44 success_percent	       201.0 success_words	       270.0 total_words	  768899 B/op	   13302 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	3.723s
+ok  	github.com/f1monkey/spellchecker	3.801s
 ```
 
 #### [Test set 2](http://norvig.com/spell-testset2.txt):
@@ -154,8 +148,7 @@ goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker
 cpu: 13th Gen Intel(R) Core(TM) i9-13980HX
-Benchmark_Norvig2-32    	     231	   4935406 ns/op	        71.25 success_percent	       285.0 success_words	       400.0 total_words	 1270755 B/op	   21801 allocs/op
+Benchmark_Norvig2-32    	     236	   5257185 ns/op	        71.25 success_percent	       285.0 success_words	       400.0 total_words	 1201260 B/op	   19346 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	4.057s
-
+ok  	github.com/f1monkey/spellchecker	4.350s
 ```

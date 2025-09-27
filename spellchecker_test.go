@@ -3,7 +3,6 @@ package spellchecker
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -47,7 +46,7 @@ func newFullSpellchecker() *Spellchecker {
 		panic(err)
 	}
 
-	err = s.AddFrom(f)
+	err = s.AddFrom(nil, f)
 	if err != nil {
 		panic(err)
 	}
@@ -66,7 +65,7 @@ func newSampleSpellchecker() *Spellchecker {
 		panic(err)
 	}
 
-	err = s.AddFrom(f)
+	err = s.AddFrom(nil, f)
 	if err != nil {
 		panic(err)
 	}
@@ -94,7 +93,7 @@ func Benchmark_Spellchecker_Fix_3(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		m.Fix("tee")
+		m.Fix(nil, "tee")
 	}
 }
 
@@ -103,7 +102,7 @@ func Benchmark_Spellchecker_Fix_6_Transposition(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		m.Fix("oragne")
+		m.Fix(nil, "oragne")
 	}
 }
 
@@ -112,7 +111,7 @@ func Benchmark_Spellchecker_Fix_6_Replacement(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		m.Fix("problam")
+		m.Fix(nil, "problam")
 	}
 }
 
@@ -171,18 +170,21 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 				}
 
 				b.StartTimer()
-				result, err := m.Suggest(word, 10)
+				result := m.Suggest(nil, word, 10)
 				b.StopTimer()
-				if err != nil && !errors.Is(err, ErrUnknownWord) {
-					fmt.Println(err)
-				}
 
 				if i == 0 {
 					total++
-					if len(result) > 0 && result[0] == item.expected {
+					if result.ExactMatch && word == item.expected {
 						ok++
 						continue
 					}
+
+					if len(result.Suggestions) > 0 && result.Suggestions[0].Value == item.expected {
+						ok++
+						continue
+					}
+
 					// got := ""
 					// if len(result) > 0 {
 					// 	got = result[0]
@@ -202,23 +204,9 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 }
 
 func Test_NewSpellchecker(t *testing.T) {
-	t.Run("must be able to create a spellchecker without any options", func(t *testing.T) {
-		s, err := New(DefaultAlphabet)
-		require.NoError(t, err)
-		require.NotNil(t, s.dict)
-	})
-	t.Run("must be able to create a spellchecker with custom splitter", func(t *testing.T) {
-		s, err := New(DefaultAlphabet, WithSplitter(bufio.ScanRunes))
-		require.NoError(t, err)
-		require.NotNil(t, s.splitter)
-	})
-}
-
-func Test_Spellchecker_WithOpts(t *testing.T) {
 	s, err := New(DefaultAlphabet)
 	require.NoError(t, err)
-	s.WithOpts(WithSplitter(bufio.ScanLines))
-	require.NotNil(t, s.splitter)
+	require.NotNil(t, s.dict)
 }
 
 func Test_Spellchecker_IsCorrect(t *testing.T) {
@@ -230,31 +218,22 @@ func Test_Spellchecker_IsCorrect(t *testing.T) {
 
 func Test_Spellchecker_Fix(t *testing.T) {
 	s := newSampleSpellchecker()
-	result, err := s.Fix("problam")
-	require.NoError(t, err)
+	result, isCorrect := s.Fix(nil, "problam")
+	require.False(t, isCorrect)
 	require.Equal(t, "problem", result)
 }
 
-func Test_Spellchecker_Fix_ScoreFunc(t *testing.T) {
+func Test_Spellchecker_Fix_CustomOptions(t *testing.T) {
 	s := newSampleSpellchecker()
-	s.WithOpts(WithScoreFunc(defaultScoreFunc))
-
-	result, err := s.Fix("problam")
-	require.NoError(t, err)
+	result, isCorrect := s.Fix(&SearchOptions{MaxErrors: 2}, "problam")
+	require.False(t, isCorrect)
 	require.Equal(t, "problem", result)
-}
-
-func Test_Spellchecker_Suggest(t *testing.T) {
-	s := newSampleSpellchecker()
-	result, err := s.Suggest("arang", 5)
-	require.NoError(t, err)
-	require.Equal(t, []string{"orange", "range"}, result)
 }
 
 func Test_Spellchecker_SuggestScore(t *testing.T) {
 	t.Run("fix", func(t *testing.T) {
 		s := newSampleSpellchecker()
-		result := s.SuggestScore("arang", 5)
+		result := s.Suggest(nil, "arang", 5)
 		require.Equal(t, SuggestionResult{
 			Suggestions: []Match{
 				{Value: "orange", Score: 0.2772588722239781},
@@ -265,13 +244,13 @@ func Test_Spellchecker_SuggestScore(t *testing.T) {
 
 	t.Run("valid word", func(t *testing.T) {
 		s := newSampleSpellchecker()
-		result := s.SuggestScore("orange", 5)
+		result := s.Suggest(nil, "orange", 5)
 		require.Equal(t, SuggestionResult{ExactMatch: true}, result)
 	})
 
 	t.Run("unknown word", func(t *testing.T) {
 		s := newSampleSpellchecker()
-		result := s.SuggestScore("qwerty", 5)
+		result := s.Suggest(nil, "qwerty", 5)
 		require.Equal(t, SuggestionResult{Suggestions: []Match{}}, result)
 	})
 }

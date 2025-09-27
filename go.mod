@@ -1,6 +1,6 @@
-module github.com/f1monkey/spellchecker
+module github.com/f1monkey/spellchecker/v2
 
-go 1.19
+go 1.24
 
 require (
 	github.com/agext/levenshtein v1.2.3
