@@ -15,22 +15,22 @@ import (
 func loadFullSpellchecker() *Spellchecker {
 	var s *Spellchecker
 	ff, err := os.Open("data/spellchecker.bin")
-	if errors.Is(err, os.ErrNotExist) {
-		s = newFullSpellchecker()
-		dst, err := os.Create("data/spellchecker.bin")
-		if err != nil {
-			panic(err)
-		}
-
-		err = s.Save(dst)
-		if err != nil {
-			panic(err)
-		}
-	} else {
+	if !errors.Is(err, os.ErrNotExist) {
 		s, err = Load(ff)
-		if err != nil {
-			panic(err)
+		if err == nil {
+			return s
 		}
+	}
+
+	s = newFullSpellchecker()
+	dst, err := os.Create("data/spellchecker.bin")
+	if err != nil {
+		panic(err)
+	}
+
+	err = s.Save(dst)
+	if err != nil {
+		panic(err)
 	}
 
 	return s

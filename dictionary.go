@@ -15,7 +15,7 @@ type dictionary struct {
 	alphabet  alphabet
 	nextID    func() uint32
 
-	words  map[uint32]string
+	words  map[uint32][]rune
 	ids    map[string]uint32
 	counts map[uint32]uint
 
@@ -35,7 +35,7 @@ func newDictionary(ab string, filterFunc FilterFunc, maxErrors int) (*dictionary
 		alphabet:   alphabet,
 		nextID:     idSeq(0),
 		ids:        make(map[string]uint32),
-		words:      make(map[uint32]string),
+		words:      make(map[uint32][]rune),
 		counts:     make(map[uint32]uint),
 		index:      make(map[uint64][]uint32),
 		filterFunc: filterFunc,
@@ -57,9 +57,11 @@ func (d *dictionary) add(word string, n uint) (uint32, error) {
 	id := d.nextID()
 	d.ids[word] = id
 
+	wordRunes := []rune(word)
+
 	d.counts[id] = n
-	d.words[id] = word
-	key := sum(d.alphabet.encode([]rune(word)))
+	d.words[id] = wordRunes
+	key := sum(d.alphabet.encode(wordRunes))
 	d.index[key] = append(d.index[key], id)
 
 	return id, nil
@@ -94,7 +96,7 @@ func (d *dictionary) getCandidates(word string, max int) []Match {
 	result := newPriorityQueue(max)
 
 	wordRunes := []rune(word)
-	bmSrc := d.alphabet.encode([]rune(wordRunes))
+	bmSrc := d.alphabet.encode(wordRunes)
 
 	// check for transposition or exact match and do early termination if found
 	// (the most common mistake is a transposition of letters)
@@ -144,13 +146,13 @@ func (d *dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune,
 			continue
 		}
 
-		score, ok := d.filterFunc(wordRunes, []rune(docWord), d.counts[id])
+		score, ok := d.filterFunc(wordRunes, docWord, d.counts[id])
 		if !ok {
 			continue
 		}
 
 		result.Push(Match{
-			Value: docWord,
+			Value: string(docWord),
 			Score: score,
 		})
 	}
@@ -160,10 +162,11 @@ var _ encoding.BinaryMarshaler = (*dictionary)(nil)
 var _ encoding.BinaryUnmarshaler = (*dictionary)(nil)
 
 type dictData struct {
-	Alphabet alphabet
-	IDs      map[string]uint32
-	Words    map[uint32]string
-	Counts   map[uint32]uint
+	Alphabet  alphabet
+	IDs       map[string]uint32
+	Words     map[uint32]string
+	WordRunes map[uint32][]rune
+	Counts    map[uint32]uint
 
 	Index map[uint64][]uint32
 
@@ -174,7 +177,7 @@ func (d *dictionary) MarshalBinary() ([]byte, error) {
 	data := &dictData{
 		Alphabet:  d.alphabet,
 		IDs:       d.ids,
-		Words:     d.words,
+		WordRunes: d.words,
 		Counts:    d.counts,
 		Index:     d.index,
 		MaxErrors: d.maxErrors,
@@ -199,7 +202,18 @@ func (d *dictionary) UnmarshalBinary(data []byte) error {
 	d.alphabet = dictData.Alphabet
 	d.ids = dictData.IDs
 	d.counts = dictData.Counts
-	d.words = dictData.Words
+
+	// compatibility with previous versions
+	if len(dictData.Words) > 0 {
+		wordRunes := make(map[uint32][]rune, len(dictData.Words))
+		for k, v := range dictData.Words {
+			wordRunes[k] = []rune(v)
+		}
+		d.words = wordRunes
+	} else {
+		d.words = dictData.WordRunes
+	}
+
 	d.index = dictData.Index
 	d.maxErrors = dictData.MaxErrors
 	d.filterFunc = defaultFilterFunc(dictData.MaxErrors)
