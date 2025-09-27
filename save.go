@@ -31,6 +31,7 @@ func Load(reader io.Reader) (*Spellchecker, error) {
 	}
 
 	return &Spellchecker{
-		dict: data.Dict,
+		dict:       data.Dict,
+		filterFunc: defaultFilterFunc(data.Dict.maxErrors),
 	}, nil
 }

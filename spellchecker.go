@@ -33,7 +33,7 @@ func New(alphabet string, opts ...OptionFunc) (*Spellchecker, error) {
 		}
 	}
 
-	dict, err := newDictionary(alphabet, result.filterFunc, result.maxErrors)
+	dict, err := newDictionary(alphabet, result.maxErrors)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func (s *Spellchecker) Fix(word string) (string, error) {
 		return word, nil
 	}
 
-	hits := s.dict.find(word, 1)
+	hits := s.dict.find(word, 1, s.filterFunc)
 	if len(hits) == 0 {
 		return word, ErrUnknownWord
 	}
@@ -132,7 +132,7 @@ func (s *Spellchecker) Suggest(word string, n int) ([]string, error) {
 		return []string{word}, nil
 	}
 
-	hits := s.dict.find(word, n)
+	hits := s.dict.find(word, n, s.filterFunc)
 	if len(hits) == 0 {
 		return []string{word}, ErrUnknownWord
 	}
@@ -161,6 +161,6 @@ func (s *Spellchecker) SuggestScore(word string, n int) SuggestionResult {
 	}
 
 	return SuggestionResult{
-		Suggestions: s.dict.find(word, n),
+		Suggestions: s.dict.find(word, n, s.filterFunc),
 	}
 }

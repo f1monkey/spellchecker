@@ -18,8 +18,6 @@ func (s *Spellchecker) WithOpts(opts ...OptionFunc) error {
 		}
 	}
 
-	s.dict.filterFunc = s.filterFunc
-
 	return nil
 }
 

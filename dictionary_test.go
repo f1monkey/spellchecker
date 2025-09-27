@@ -7,7 +7,7 @@ import (
 )
 
 func Test_dictionary_id(t *testing.T) {
-	dict, err := newDictionary(DefaultAlphabet, nil, DefaultMaxErrors)
+	dict, err := newDictionary(DefaultAlphabet, DefaultMaxErrors)
 	require.NoError(t, err)
 
 	t.Run("must return 0 for unexisting word", func(t *testing.T) {
@@ -24,7 +24,7 @@ func Test_dictionary_id(t *testing.T) {
 
 func Test_dictionary_add(t *testing.T) {
 	t.Run("must add word to dictionary index", func(t *testing.T) {
-		dict, err := newDictionary(DefaultAlphabet, nil, DefaultMaxErrors)
+		dict, err := newDictionary(DefaultAlphabet, DefaultMaxErrors)
 		require.NoError(t, err)
 
 		id, err := dict.add("qwe", 1)
@@ -49,7 +49,7 @@ func Test_dictionary_add(t *testing.T) {
 
 func Test_Dictionary_Inc(t *testing.T) {
 	t.Run("must increase counter value", func(t *testing.T) {
-		dict, err := newDictionary(DefaultAlphabet, nil, DefaultMaxErrors)
+		dict, err := newDictionary(DefaultAlphabet, DefaultMaxErrors)
 		dict.counts[1] = 0
 		require.NoError(t, err)
 
