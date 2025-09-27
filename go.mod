@@ -3,7 +3,7 @@ module github.com/f1monkey/spellchecker
 go 1.19
 
 require (
-	github.com/agnivade/levenshtein v1.1.1
+	github.com/agext/levenshtein v1.2.3
 	github.com/f1monkey/bitmap v1.4.0
 	github.com/stretchr/testify v1.8.4
 )

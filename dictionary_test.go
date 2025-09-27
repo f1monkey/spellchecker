@@ -7,7 +7,7 @@ import (
 )
 
 func Test_dictionary_id(t *testing.T) {
-	dict, err := newDictionary(DefaultAlphabet, defaultScorefunc, DefaultMaxErrors)
+	dict, err := newDictionary(DefaultAlphabet, nil, DefaultMaxErrors)
 	require.NoError(t, err)
 
 	t.Run("must return 0 for unexisting word", func(t *testing.T) {
@@ -24,14 +24,14 @@ func Test_dictionary_id(t *testing.T) {
 
 func Test_dictionary_add(t *testing.T) {
 	t.Run("must add word to dictionary index", func(t *testing.T) {
-		dict, err := newDictionary(DefaultAlphabet, defaultScorefunc, DefaultMaxErrors)
+		dict, err := newDictionary(DefaultAlphabet, nil, DefaultMaxErrors)
 		require.NoError(t, err)
 
 		id, err := dict.add("qwe", 1)
 		require.NoError(t, err)
 		require.Equal(t, uint32(1), id)
 		require.Equal(t, uint(1), dict.counts[id])
-		require.Equal(t, "qwe", dict.words[id])
+		require.Equal(t, []rune("qwe"), dict.words[id])
 		require.Equal(t, 1, len(dict.ids))
 		require.Len(t, dict.index, 1)
 
@@ -39,7 +39,7 @@ func Test_dictionary_add(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint32(2), id)
 		require.Equal(t, uint(2), dict.counts[id])
-		require.Equal(t, "asd", dict.words[id])
+		require.Equal(t, []rune("asd"), dict.words[id])
 		require.Equal(t, 2, len(dict.ids))
 		require.Len(t, dict.index, 2)
 
@@ -49,7 +49,7 @@ func Test_dictionary_add(t *testing.T) {
 
 func Test_Dictionary_Inc(t *testing.T) {
 	t.Run("must increase counter value", func(t *testing.T) {
-		dict, err := newDictionary(DefaultAlphabet, defaultScorefunc, DefaultMaxErrors)
+		dict, err := newDictionary(DefaultAlphabet, nil, DefaultMaxErrors)
 		dict.counts[1] = 0
 		require.NoError(t, err)
 

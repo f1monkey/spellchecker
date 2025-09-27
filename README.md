@@ -1,5 +1,8 @@
 # Spellchecker
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/f1monkey/spellchecker.svg)](https://pkg.go.dev/github.com/f1monkey/spellchecker)
+[![CI](https://github.com/f1monkey/spellchecker/actions/workflows/test.yml/badge.svg)](https://github.com/f1monkey/spellchecker/actions/workflows/test.yml)
+
 Yet another spellchecker written in go.
 
 - [Spellchecker](#spellchecker)
@@ -11,9 +14,9 @@ Yet another spellchecker written in go.
 		- [Test set 2:](#test-set-2)
 
 ## Features:
-- very small database: approximately 1mb for 30,000 unique words
-- average time to fix one word  ~35μs
-- about 70-74% accuracy in Peter Norvig's test sets (see [benchmarks](#benchmarks))
+- very compact database: ~1 MB for 30,000 unique words
+- average time to fix a single word: ~35 µs
+- achieves about 70–74% accuracy on Peter Norvig’s test sets (see [benchmarks](#benchmarks))
 
 ## Installation
 
@@ -29,43 +32,47 @@ go get -v github.com/f1monkey/spellchecker
 ```go
 
 func main() {
-	// Create new instance
+	// Create a new instance
 	sc, err := spellchecker.New(
 		"abcdefghijklmnopqrstuvwxyz1234567890", // allowed symbols, other symbols will be ignored
-		spellchecker.WithMaxErrors(2)
+		spellchecker.WithMaxErrors(2) 			// see options.go
 	)
 	if err != nil {
 		panic(err)
 	}
 
-	// Read data from any io.Reader
+	// Load data from any io.Reader
 	in, err := os.Open("data/sample.txt")
 	if err != nil {
 		panic(err)
 	}
 	sc.AddFrom(in)
 
-	// Add some words
+	// Add words manually
 	sc.Add("lock", "stock", "and", "two", "smoking", "barrels")
 
-	// Check if a word is correct
+	// Check if a word is valid
 	result := sc.IsCorrect("coffee")
 	fmt.Println(result) // true
 
-	// Fix one word
+	// Correct a single word
 	fixed, err := sc.Fix("awepon")
 	if err != nil && !errors.Is(err, spellchecker.ErrUnknownWord) {
 		panic(err)
 	}
 	fmt.Println(fixed) // weapon
 
-	// Find max=10 suggestions for a word
+	// Find up to 10 suggestions for a word
 	matches, err := sc.Suggest("rang", 10)
 	if err != nil && !errors.Is(err, spellchecker.ErrUnknownWord) {
 		panic(err)
 	}
 	fmt.Println(matches) // [range, orange]
 ```
+
+### Options
+
+See [options.go](./options.go) for the list of available options.
 
 ### Save/load
 
@@ -79,7 +86,7 @@ func main() {
 	}
 	sc.Save(out)
 
-	// Load saved data from io.Reader
+	// Load data back from io.Reader
 	in, err = os.Open("data/out.bin")
 	if err != nil {
 		panic(err)
@@ -92,26 +99,28 @@ func main() {
 
 ### Custom score function
 
-You can provide a custom score function if you need to.
+You can provide a custom scoring function if needed:
 
 ```go
-	var scoreFunc spellchecker.ScoreFunc = func(src, candidate []rune, distance, cnt int) float64 {
-		return 1.0 // return constant score
+	var fn spellchecker.FilterFunc = func(src, candidate []rune, cnt int) (float64, bool) {
+		// you can calculate Levenshtein distance here (see defaultFilterFunc in options.go for example)
+
+		return 1.0, true // constant score
 	}
 
-	sc, err := spellchecker.New("abc", spellchecker.WithScoreFunc(scoreFunc))
+	sc, err := spellchecker.New("abc", spellchecker.WithFilterFunc(fn))
 	if err != nil {
 		// handle err
 	}
 
-	// after you load spellchecker from file
-	// you will need to provide the function again:
+	// After loading a spellchecker from a file,
+	// you need to set the function again:
 	sc, err = spellchecker.Load(inFile)
 	if err != nil {
 		// handle err
 	}
 
-	err = sc.WithOpts(spellchecker.WithScoreFunc(scoreFunc))
+	err = sc.WithOpts(spellchecker.WithFilterFunc(fn))
 	if err != nil {
 		// handle err
 	}
@@ -125,27 +134,28 @@ Tests are based on data from [Peter Norvig's article about spelling correction](
 #### [Test set 1](http://norvig.com/spell-testset1.txt):
 
 ```
-Running tool: /usr/local/go/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norvig1$ github.com/f1monkey/spellchecker
+Running tool: /usr/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norvig1$ github.com/f1monkey/spellchecker -count=1
 
 goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker
 cpu: 13th Gen Intel(R) Core(TM) i9-13980HX
-Benchmark_Norvig1-32    	     294	   3876229 ns/op	        74.07 success_percent	       200.0 success_words	       270.0 total_words	  918275 B/op	    2150 allocs/op
+Benchmark_Norvig1-32    	     348	   3385868 ns/op	        74.44 success_percent	       201.0 success_words	       270.0 total_words	  830803 B/op	   15504 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	3.378s
+ok  	github.com/f1monkey/spellchecker	3.723s
 ```
 
 #### [Test set 2](http://norvig.com/spell-testset2.txt):
 
 ```
-Running tool: /usr/local/go/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norvig2$ github.com/f1monkey/spellchecker
+Running tool: /usr/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norvig2$ github.com/f1monkey/spellchecker -count=1
 
 goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker
 cpu: 13th Gen Intel(R) Core(TM) i9-13980HX
-Benchmark_Norvig2-32    	     198	   6102429 ns/op	        70.00 success_percent	       280.0 success_words	       400.0 total_words	 1327385 B/op	    3121 allocs/op
+Benchmark_Norvig2-32    	     231	   4935406 ns/op	        71.25 success_percent	       285.0 success_words	       400.0 total_words	 1270755 B/op	   21801 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	3.895s
+ok  	github.com/f1monkey/spellchecker	4.057s
+
 ```

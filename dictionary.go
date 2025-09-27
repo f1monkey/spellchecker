@@ -4,44 +4,41 @@ import (
 	"bytes"
 	"encoding"
 	"encoding/gob"
-	"sort"
+	"sync"
 	"sync/atomic"
 
-	"github.com/agnivade/levenshtein"
 	"github.com/f1monkey/bitmap"
 )
-
-type scoreFunc func(src []rune, candidate []rune, distance int, cnt uint) float64
 
 type dictionary struct {
 	maxErrors int
 	alphabet  alphabet
 	nextID    func() uint32
 
-	words  map[uint32]string
+	words  map[uint32][]rune
 	ids    map[string]uint32
 	counts map[uint32]uint
 
 	index map[uint64][]uint32
 
-	scoreFunc scoreFunc
+	filterFunc FilterFunc
 }
 
-func newDictionary(ab string, scoreFunc scoreFunc, maxErrors int) (*dictionary, error) {
+func newDictionary(ab string, filterFunc FilterFunc, maxErrors int) (*dictionary, error) {
 	alphabet, err := newAlphabet(ab)
 	if err != nil {
 		return nil, err
 	}
 
 	return &dictionary{
-		maxErrors: maxErrors,
-		alphabet:  alphabet,
-		nextID:    idSeq(0),
-		ids:       make(map[string]uint32),
-		words:     make(map[uint32]string),
-		counts:    make(map[uint32]uint),
-		index:     make(map[uint64][]uint32),
-		scoreFunc: scoreFunc,
+		maxErrors:  maxErrors,
+		alphabet:   alphabet,
+		nextID:     idSeq(0),
+		ids:        make(map[string]uint32),
+		words:      make(map[uint32][]rune),
+		counts:     make(map[uint32]uint),
+		index:      make(map[uint64][]uint32),
+		filterFunc: filterFunc,
 	}, nil
 }
 
@@ -60,10 +57,11 @@ func (d *dictionary) add(word string, n uint) (uint32, error) {
 	id := d.nextID()
 	d.ids[word] = id
 
-	runes := []rune(word)
+	wordRunes := []rune(word)
+
 	d.counts[id] = n
-	d.words[id] = word
-	key := sum(d.alphabet.encode(runes))
+	d.words[id] = wordRunes
+	key := sum(d.alphabet.encode(wordRunes))
 	d.index[key] = append(d.index[key], id)
 
 	return id, nil
@@ -88,110 +86,80 @@ func (d *dictionary) find(word string, n int) []Match {
 		return nil
 	}
 
-	candidates := d.getCandidates(word, n)
-	sort.Slice(candidates, func(i, j int) bool { return candidates[i].Score > candidates[j].Score })
-
-	return candidates
-}
-
-func (d *dictionary) getCandidates(word string, max int) []Match {
-	result := newPriorityQueue(max)
+	result := newPriorityQueue(n)
 
 	wordRunes := []rune(word)
-	bmSrc := d.alphabet.encode([]rune(wordRunes))
+	bmSrc := d.alphabet.encode(wordRunes)
 
-	// "exact match" OR "candidate has all the same letters as the word but in different order"
-	key := sum(bmSrc)
-	ids := d.index[key]
+	// check for transposition or exact match and do early termination if found
+	// (the most common mistake is a transposition of letters)
+	d.fillWithCandidates(result, wordRunes, sum(bmSrc))
+	if result.Len() != 0 {
+		return result.DrainSorted()
+	}
+
+	bitmaps := bitmapsPool.Get().(map[uint64]struct{})
+	d.computeCandidateBitmaps(bitmaps, bmSrc, d.maxErrors)
+	for bm := range bitmaps {
+		d.fillWithCandidates(result, wordRunes, bm)
+	}
+
+	releaseBitmaps(bitmaps)
+
+	return result.DrainSorted()
+}
+
+func (d *dictionary) computeCandidateBitmaps(bitmaps map[uint64]struct{}, src bitmap.Bitmap32, maxFlips int) {
+	var dfs func(bm bitmap.Bitmap32, level, start int)
+	dfs = func(bm bitmap.Bitmap32, level, start int) {
+		key := sum(bm)
+		if len(d.index[key]) > 0 {
+			bitmaps[key] = struct{}{}
+		}
+
+		if level == maxFlips {
+			return
+		}
+
+		for i := start; i < d.alphabet.len(); i++ {
+			bm.Xor(uint32(i)) // change one bit
+			dfs(bm, level+1, i+1)
+			bm.Xor(uint32(i)) // revert back
+		}
+	}
+
+	dfs(src.Clone(), 0, 0)
+}
+
+func (d *dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune, bm uint64) {
+	ids := d.index[bm]
 	for _, id := range ids {
 		docWord, ok := d.words[id]
 		if !ok {
 			continue
 		}
 
-		distance := levenshtein.ComputeDistance(word, docWord)
-		if distance > d.maxErrors {
+		score, ok := d.filterFunc(wordRunes, docWord, d.counts[id])
+		if !ok {
 			continue
 		}
+
 		result.Push(Match{
-			Value: docWord,
-			Score: d.scoreFunc(wordRunes, []rune(docWord), distance, d.counts[id]),
+			Value: string(docWord),
+			Score: score,
 		})
 	}
-	// the most common mistake is a transposition of letters.
-	// so if we found one here, we do early termination
-	if result.Len() != 0 {
-		return result.items
-	}
-
-	// @todo perform phonetic analysis with early termination here
-	for bm := range d.computeCandidateBitmaps(bmSrc) {
-		ids := d.index[bm]
-		for _, id := range ids {
-			docWord, ok := d.words[id]
-			if !ok {
-				continue
-			}
-
-			distance := levenshtein.ComputeDistance(word, docWord)
-			if distance > d.maxErrors {
-				continue
-			}
-			result.Push(Match{
-				Value: docWord,
-				Score: d.scoreFunc(wordRunes, []rune(docWord), distance, d.counts[id]),
-			})
-		}
-	}
-
-	return result.items
-}
-
-func (d *dictionary) computeCandidateBitmaps(bmSrc bitmap.Bitmap32) map[uint64]struct{} {
-	bitmaps := make(map[uint64]struct{}, d.alphabet.len()*5)
-	bmSrc = bmSrc.Clone()
-
-	var i, j uint32
-	// swap one bit
-	for i = 0; i < uint32(d.alphabet.len()); i++ {
-		bmSrc.Xor(i)
-
-		// swap one more bit to be able to fix:
-		// - two deletions ("rang" => "orange")
-		// - replacements ("problam" => "problem")
-		for j = 0; j < uint32(d.alphabet.len()); j++ {
-			if i == j {
-				continue
-			}
-
-			bmSrc.Xor(j)
-			key := sum(bmSrc)
-			bmSrc.Xor(j) // return back the changed bit
-			if len(d.index[key]) == 0 {
-				continue
-			}
-			bitmaps[key] = struct{}{}
-		}
-
-		key := sum(bmSrc)
-		bmSrc.Xor(i) // return back the changed bit
-		if len(d.index[key]) == 0 {
-			continue
-		}
-		bitmaps[key] = struct{}{}
-	}
-
-	return bitmaps
 }
 
 var _ encoding.BinaryMarshaler = (*dictionary)(nil)
 var _ encoding.BinaryUnmarshaler = (*dictionary)(nil)
 
 type dictData struct {
-	Alphabet alphabet
-	IDs      map[string]uint32
-	Words    map[uint32]string
-	Counts   map[uint32]uint
+	Alphabet  alphabet
+	IDs       map[string]uint32
+	Words     map[uint32]string
+	WordRunes map[uint32][]rune
+	Counts    map[uint32]uint
 
 	Index map[uint64][]uint32
 
@@ -202,7 +170,7 @@ func (d *dictionary) MarshalBinary() ([]byte, error) {
 	data := &dictData{
 		Alphabet:  d.alphabet,
 		IDs:       d.ids,
-		Words:     d.words,
+		WordRunes: d.words,
 		Counts:    d.counts,
 		Index:     d.index,
 		MaxErrors: d.maxErrors,
@@ -227,10 +195,21 @@ func (d *dictionary) UnmarshalBinary(data []byte) error {
 	d.alphabet = dictData.Alphabet
 	d.ids = dictData.IDs
 	d.counts = dictData.Counts
-	d.words = dictData.Words
+
+	// compatibility with previous versions
+	if len(dictData.Words) > 0 {
+		wordRunes := make(map[uint32][]rune, len(dictData.Words))
+		for k, v := range dictData.Words {
+			wordRunes[k] = []rune(v)
+		}
+		d.words = wordRunes
+	} else {
+		d.words = dictData.WordRunes
+	}
+
 	d.index = dictData.Index
 	d.maxErrors = dictData.MaxErrors
-	d.scoreFunc = defaultScorefunc
+	d.filterFunc = defaultFilterFunc(dictData.MaxErrors)
 
 	var max uint32
 	for _, id := range d.ids {
@@ -258,4 +237,18 @@ func sum(b bitmap.Bitmap32) uint64 {
 	}
 
 	return result
+}
+
+func releaseBitmaps(m map[uint64]struct{}) {
+	for k := range m {
+		delete(m, k)
+	}
+
+	bitmapsPool.Put(m)
+}
+
+var bitmapsPool = sync.Pool{
+	New: func() interface{} {
+		return make(map[uint64]struct{}, 256)
+	},
 }
