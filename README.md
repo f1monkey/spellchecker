@@ -21,7 +21,7 @@ Yet another spellchecker written in go.
 ## Installation
 
 ```
-go get -v github.com/f1monkey/spellchecker/v2
+go get github.com/f1monkey/spellchecker/v2@latest
 ```
 
 ## Usage
