@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding"
 	"encoding/gob"
+	"sync"
 	"sync/atomic"
 
 	"github.com/f1monkey/bitmap"
@@ -97,16 +98,18 @@ func (d *dictionary) find(word string, n int) []Match {
 		return result.DrainSorted()
 	}
 
-	for bm := range d.computeCandidateBitmaps(bmSrc, d.maxErrors) {
+	bitmaps := bitmapsPool.Get().(map[uint64]struct{})
+	d.computeCandidateBitmaps(bitmaps, bmSrc, d.maxErrors)
+	for bm := range bitmaps {
 		d.fillWithCandidates(result, wordRunes, bm)
 	}
+
+	releaseBitmaps(bitmaps)
 
 	return result.DrainSorted()
 }
 
-func (d *dictionary) computeCandidateBitmaps(bmSrc bitmap.Bitmap32, maxFlips int) map[uint64]struct{} {
-	bitmaps := make(map[uint64]struct{}, d.alphabet.len()*maxFlips*2)
-
+func (d *dictionary) computeCandidateBitmaps(bitmaps map[uint64]struct{}, src bitmap.Bitmap32, maxFlips int) {
 	var dfs func(bm bitmap.Bitmap32, level, start int)
 	dfs = func(bm bitmap.Bitmap32, level, start int) {
 		key := sum(bm)
@@ -121,13 +124,11 @@ func (d *dictionary) computeCandidateBitmaps(bmSrc bitmap.Bitmap32, maxFlips int
 		for i := start; i < d.alphabet.len(); i++ {
 			bm.Xor(uint32(i)) // change one bit
 			dfs(bm, level+1, i+1)
-			bm.Xor(uint32(i)) // return back the changed bit
+			bm.Xor(uint32(i)) // revert back
 		}
 	}
 
-	dfs(bmSrc.Clone(), 0, 0)
-
-	return bitmaps
+	dfs(src.Clone(), 0, 0)
 }
 
 func (d *dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune, bm uint64) {
@@ -236,4 +237,18 @@ func sum(b bitmap.Bitmap32) uint64 {
 	}
 
 	return result
+}
+
+func releaseBitmaps(m map[uint64]struct{}) {
+	for k := range m {
+		delete(m, k)
+	}
+
+	bitmapsPool.Put(m)
+}
+
+var bitmapsPool = sync.Pool{
+	New: func() interface{} {
+		return make(map[uint64]struct{}, 256)
+	},
 }

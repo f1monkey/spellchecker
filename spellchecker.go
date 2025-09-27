@@ -48,7 +48,7 @@ func New(alphabet string, opts ...OptionFunc) (*Spellchecker, error) {
 	return result, nil
 }
 
-// AddFrom reads input, splits it with spellchecker splitter func and adds words to dictionary
+// AddFrom reads input, splits it with spellchecker splitter func and adds words to the dictionary
 func (m *Spellchecker) AddFrom(input io.Reader) error {
 	words := make([]string, 1000)
 	i := 0
@@ -72,7 +72,7 @@ func (m *Spellchecker) AddFrom(input io.Reader) error {
 	return nil
 }
 
-// Add adds provided words to dictionary
+// Add adds provided words to the dictionary
 func (m *Spellchecker) Add(words ...string) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
@@ -87,7 +87,7 @@ func (m *Spellchecker) Add(words ...string) {
 	}
 }
 
-// AddWeight adds provided words to dictionary with a custom weight
+// AddWeight adds provided words to the dictionary with a custom weight
 func (m *Spellchecker) AddWeight(weight uint, words ...string) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
