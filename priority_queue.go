@@ -31,10 +31,16 @@ func (pq *priorityQueue) Push(x interface{}) {
 	if len(pq.items) < pq.capacity {
 		pq.items = append(pq.items, item)
 		heap.Fix(pq, len(pq.items)-1)
-	} else if len(pq.items) > 0 && item.Score >= pq.items[0].Score {
-		pq.items[0] = item
-		heap.Fix(pq, 0)
+
+		return
 	}
+
+	if item.Score <= pq.items[0].Score {
+		return
+	}
+
+	pq.items[0] = item
+	heap.Fix(pq, 0)
 }
 
 func (pq *priorityQueue) Pop() interface{} {
