@@ -17,6 +17,7 @@ Yet another spellchecker written in go.
 - very compact database: ~1 MB for 30,000 unique words
 - average time to fix a single word: ~35 µs
 - achieves about 70–74% accuracy on Peter Norvig’s test sets (see [benchmarks](#benchmarks))
+- no built-in dictionary — you can provide any custom words, and the spellchecker will only know them
 
 ## Installation
 
