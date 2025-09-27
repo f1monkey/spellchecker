@@ -164,7 +164,6 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 	total := 0
 	ok := 0
 	for i := 0; i < b.N; i++ {
-
 		for _, item := range data {
 			for _, word := range item.words {
 				if word == "" {
@@ -231,6 +230,15 @@ func Test_Spellchecker_IsCorrect(t *testing.T) {
 
 func Test_Spellchecker_Fix(t *testing.T) {
 	s := newSampleSpellchecker()
+	result, err := s.Fix("problam")
+	require.NoError(t, err)
+	require.Equal(t, "problem", result)
+}
+
+func Test_Spellchecker_Fix_ScoreFunc(t *testing.T) {
+	s := newSampleSpellchecker()
+	s.WithOpts(WithScoreFunc(defaultScoreFunc))
+
 	result, err := s.Fix("problam")
 	require.NoError(t, err)
 	require.Equal(t, "problem", result)

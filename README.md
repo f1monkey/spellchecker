@@ -102,11 +102,13 @@ See [options.go](./options.go) for the list of available options.
 You can provide a custom scoring function if needed:
 
 ```go
-	var scoreFunc spellchecker.ScoreFunc = func(src, candidate []rune, distance, cnt int) float64 {
-		return 1.0 // constant score
+	var fn spellchecker.FilterFunc = func(src, candidate []rune, cnt int) (float64, bool) {
+		// you can calculate Levenshtein distance here (see defaultFilterFunc in options.go for example)
+
+		return 1.0, true // constant score
 	}
 
-	sc, err := spellchecker.New("abc", spellchecker.WithScoreFunc(scoreFunc))
+	sc, err := spellchecker.New("abc", spellchecker.WithFilterFunc(fn))
 	if err != nil {
 		// handle err
 	}
@@ -118,7 +120,7 @@ You can provide a custom scoring function if needed:
 		// handle err
 	}
 
-	err = sc.WithOpts(spellchecker.WithScoreFunc(scoreFunc))
+	err = sc.WithOpts(spellchecker.WithFilterFunc(fn))
 	if err != nil {
 		// handle err
 	}

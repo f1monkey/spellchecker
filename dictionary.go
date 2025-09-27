@@ -7,11 +7,8 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"github.com/agext/levenshtein"
 	"github.com/f1monkey/bitmap"
 )
-
-type scoreFunc func(src []rune, candidate []rune, distance int, cnt uint) float64
 
 type dictionary struct {
 	maxErrors int
@@ -24,24 +21,24 @@ type dictionary struct {
 
 	index map[uint64][]uint32
 
-	scoreFunc scoreFunc
+	filterFunc FilterFunc
 }
 
-func newDictionary(ab string, scoreFunc scoreFunc, maxErrors int) (*dictionary, error) {
+func newDictionary(ab string, filterFunc FilterFunc, maxErrors int) (*dictionary, error) {
 	alphabet, err := newAlphabet(ab)
 	if err != nil {
 		return nil, err
 	}
 
 	return &dictionary{
-		maxErrors: maxErrors,
-		alphabet:  alphabet,
-		nextID:    idSeq(0),
-		ids:       make(map[string]uint32),
-		words:     make(map[uint32]string),
-		counts:    make(map[uint32]uint),
-		index:     make(map[uint64][]uint32),
-		scoreFunc: scoreFunc,
+		maxErrors:  maxErrors,
+		alphabet:   alphabet,
+		nextID:     idSeq(0),
+		ids:        make(map[string]uint32),
+		words:      make(map[uint32]string),
+		counts:     make(map[uint32]uint),
+		index:      make(map[uint64][]uint32),
+		filterFunc: filterFunc,
 	}, nil
 }
 
@@ -60,10 +57,9 @@ func (d *dictionary) add(word string, n uint) (uint32, error) {
 	id := d.nextID()
 	d.ids[word] = id
 
-	runes := []rune(word)
 	d.counts[id] = n
 	d.words[id] = word
-	key := sum(d.alphabet.encode(runes))
+	key := sum(d.alphabet.encode([]rune(word)))
 	d.index[key] = append(d.index[key], id)
 
 	return id, nil
@@ -148,14 +144,14 @@ func (d *dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune,
 			continue
 		}
 
-		distance, _, _ := levenshtein.Calculate(wordRunes, []rune(docWord), 0, 1, 1, 1)
-		if distance > d.maxErrors {
+		score, ok := d.filterFunc(wordRunes, []rune(docWord), d.counts[id])
+		if !ok {
 			continue
 		}
 
 		result.Push(Match{
 			Value: docWord,
-			Score: d.scoreFunc(wordRunes, []rune(docWord), distance, d.counts[id]),
+			Score: score,
 		})
 	}
 }
@@ -206,7 +202,7 @@ func (d *dictionary) UnmarshalBinary(data []byte) error {
 	d.words = dictData.Words
 	d.index = dictData.Index
 	d.maxErrors = dictData.MaxErrors
-	d.scoreFunc = defaultScorefunc
+	d.filterFunc = defaultFilterFunc(dictData.MaxErrors)
 
 	var max uint32
 	for _, id := range d.ids {

@@ -15,28 +15,35 @@ type OptionFunc func(s *Spellchecker) error
 type Spellchecker struct {
 	mtx sync.RWMutex
 
-	dict      *dictionary
-	splitter  bufio.SplitFunc
-	scoreFunc scoreFunc
-	maxErrors int
+	dict       *dictionary
+	splitter   bufio.SplitFunc
+	filterFunc FilterFunc
+	scoreFunc  ScoreFunc
+	maxErrors  int
 }
 
 func New(alphabet string, opts ...OptionFunc) (*Spellchecker, error) {
 	result := &Spellchecker{
-		maxErrors: DefaultMaxErrors,
-		scoreFunc: defaultScorefunc,
+		maxErrors:  DefaultMaxErrors,
+		filterFunc: defaultFilterFunc(DefaultMaxErrors),
 	}
-	dict, err := newDictionary(alphabet, result.scoreFunc, result.maxErrors)
-	if err != nil {
-		return nil, err
-	}
-	result.dict = dict
 
 	for _, o := range opts {
 		if err := o(result); err != nil {
 			return nil, err
 		}
 	}
+
+	if result.scoreFunc != nil {
+		result.filterFunc = wrapScoreFunc(result.scoreFunc, result.maxErrors)
+	}
+
+	dict, err := newDictionary(alphabet, result.filterFunc, result.maxErrors)
+	if err != nil {
+		return nil, err
+	}
+
+	result.dict = dict
 
 	return result, nil
 }
@@ -161,18 +168,4 @@ func (s *Spellchecker) SuggestScore(word string, n int) SuggestionResult {
 	return SuggestionResult{
 		Suggestions: s.dict.find(word, n),
 	}
-}
-
-// WithOpt set spellchecker options
-func (s *Spellchecker) WithOpts(opts ...OptionFunc) error {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
-	for _, o := range opts {
-		if err := o(s); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
