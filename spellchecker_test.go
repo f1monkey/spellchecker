@@ -46,7 +46,7 @@ func newFullSpellchecker() *Spellchecker {
 		panic(err)
 	}
 
-	err = s.AddFrom(nil, f)
+	err = s.AddFrom(f)
 	if err != nil {
 		panic(err)
 	}
@@ -65,7 +65,7 @@ func newSampleSpellchecker() *Spellchecker {
 		panic(err)
 	}
 
-	err = s.AddFrom(nil, f)
+	err = s.AddFrom(f)
 	if err != nil {
 		panic(err)
 	}
@@ -88,12 +88,12 @@ func Benchmark_Spellchecker_IsCorrect(b *testing.B) {
 	}
 }
 
-func Benchmark_Spellchecker_Fix_3(b *testing.B) {
+func Benchmark_Spellchecker_Suggest_3(b *testing.B) {
 	m := loadFullSpellchecker()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		m.Fix(nil, "tee")
+		m.Suggest("tee", 5)
 	}
 }
 
@@ -102,7 +102,7 @@ func Benchmark_Spellchecker_Fix_6_Transposition(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		m.Fix(nil, "oragne")
+		m.Suggest("oragne", 5)
 	}
 }
 
@@ -111,7 +111,7 @@ func Benchmark_Spellchecker_Fix_6_Replacement(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		m.Fix(nil, "problam")
+		m.Suggest("problam", 5)
 	}
 }
 
@@ -170,7 +170,7 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 				}
 
 				b.StartTimer()
-				result := m.Suggest(nil, word, 10)
+				result := m.Suggest(word, 10)
 				b.StopTimer()
 
 				if i == 0 {
@@ -214,43 +214,4 @@ func Test_Spellchecker_IsCorrect(t *testing.T) {
 
 	assert.True(t, s.IsCorrect("orange"))
 	assert.False(t, s.IsCorrect("car"))
-}
-
-func Test_Spellchecker_Fix(t *testing.T) {
-	s := newSampleSpellchecker()
-	result, isCorrect := s.Fix(nil, "problam")
-	require.False(t, isCorrect)
-	require.Equal(t, "problem", result)
-}
-
-func Test_Spellchecker_Fix_CustomOptions(t *testing.T) {
-	s := newSampleSpellchecker()
-	result, isCorrect := s.Fix(&SearchOptions{MaxErrors: 2}, "problam")
-	require.False(t, isCorrect)
-	require.Equal(t, "problem", result)
-}
-
-func Test_Spellchecker_SuggestScore(t *testing.T) {
-	t.Run("fix", func(t *testing.T) {
-		s := newSampleSpellchecker()
-		result := s.Suggest(nil, "arang", 5)
-		require.Equal(t, SuggestionResult{
-			Suggestions: []Match{
-				{Value: "orange", Score: 0.2772588722239781},
-				{Value: "range", Score: 0.13862943611198905},
-			},
-		}, result)
-	})
-
-	t.Run("valid word", func(t *testing.T) {
-		s := newSampleSpellchecker()
-		result := s.Suggest(nil, "orange", 5)
-		require.Equal(t, SuggestionResult{ExactMatch: true}, result)
-	})
-
-	t.Run("unknown word", func(t *testing.T) {
-		s := newSampleSpellchecker()
-		result := s.Suggest(nil, "qwerty", 5)
-		require.Equal(t, SuggestionResult{Suggestions: []Match{}}, result)
-	})
 }

@@ -27,16 +27,14 @@ func Test_dictionary_add(t *testing.T) {
 		dict, err := newDictionary(DefaultAlphabet)
 		require.NoError(t, err)
 
-		id, err := dict.add("qwe", 1)
-		require.NoError(t, err)
+		id := dict.add("qwe", 1)
 		require.Equal(t, uint32(1), id)
 		require.Equal(t, uint(1), dict.counts[id])
 		require.Equal(t, []rune("qwe"), dict.words[id])
 		require.Equal(t, 1, len(dict.ids))
 		require.Len(t, dict.index, 1)
 
-		id, err = dict.add("asd", 2)
-		require.NoError(t, err)
+		id = dict.add("asd", 2)
 		require.Equal(t, uint32(2), id)
 		require.Equal(t, uint(2), dict.counts[id])
 		require.Equal(t, []rune("asd"), dict.words[id])

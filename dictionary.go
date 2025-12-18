@@ -48,7 +48,7 @@ func (d *dictionary) has(word string) bool {
 }
 
 // add puts the word to the dictionary
-func (d *dictionary) add(word string, n uint) (uint32, error) {
+func (d *dictionary) add(word string, n uint) uint32 {
 	id := d.nextID()
 	d.ids[word] = id
 
@@ -59,7 +59,7 @@ func (d *dictionary) add(word string, n uint) (uint32, error) {
 	key := sum(d.alphabet.encode(wordRunes))
 	d.index[key] = append(d.index[key], id)
 
-	return id, nil
+	return id
 }
 
 // inc increase word occurence counter
