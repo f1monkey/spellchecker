@@ -1,7 +1,7 @@
 # Spellchecker
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/f1monkey/spellchecker.svg)](https://pkg.go.dev/github.com/f1monkey/spellchecker)
-[![CI](https://github.com/f1monkey/spellchecker/actions/workflows/test.yml/badge.svg)](https://github.com/f1monkey/spellchecker/actions/workflows/test.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/f1monkey/spellchecker.svg)](https://pkg.go.dev/github.com/f1monkey/spellchecker/v3)
+[![CI](https://github.com/f1monkey/spellchecker/actions/workflows/test.yaml/badge.svg)](https://github.com/f1monkey/spellchecker/actions/workflows/test.yaml)
 
 Yet another spellchecker written in go.
 
@@ -21,7 +21,7 @@ Yet another spellchecker written in go.
 ## Installation
 
 ```
-go get -v github.com/f1monkey/spellchecker/v2
+go get -v github.com/f1monkey/spellchecker/v3
 ```
 
 ## Usage
@@ -29,54 +29,108 @@ go get -v github.com/f1monkey/spellchecker/v2
 
 ### Quick start
 
-```go
+1. Initialize the spellchecker. You need to pass an alphabet: a set of allowed characters that will be used for indexing and primary word checks. (All other characters will be ignored for these operations.)
 
-func main() {
+```go
 	// Create a new instance
 	sc, err := spellchecker.New(
 		"abcdefghijklmnopqrstuvwxyz1234567890", // allowed symbols, other symbols will be ignored
 	)
-	if err != nil {
-		panic(err)
-	}
-
-	// The weight increases the likelihood that the word will be chosen as a correction.
-	weight := uint(1)
-
-	// Load data from any io.Reader
-	in, err := os.Open("data/sample.txt")
-	if err != nil {
-		panic(err)
-	}
-
-	sc.AddFrom(&spellchecker.AddOptions{Weight: weight}, in)
-	// OR
-	sc.AddFrom(nil, in)
-
-	// Add words manually
-	sc.Add(nil, "lock", "stock", "and", "two", "smoking", "barrels")
-
-	// Check if a word is valid
-	result := sc.IsCorrect("coffee")
-	fmt.Println(result) // true
-
-	// Correct a single word
-	fixed, isCorrect := sc.Fix(nil, "awepon")
-	fmt.Println(isCorrect) // false
-	fmt.Println(fixed) // weapon
-
-	// Find up to 10 suggestions for a word
-	matches := sc.Suggest(nil, "rang", 10)
-	fmt.Println(matches) // [range, orange]
-
-	if len(os.Args) < 2 {
-		log.Fatal("dict path must be provided")
-	}
 ```
+
+2. Add some words to the dictionary:
+	1. from any `io.Reader`:
+	```go
+		in, _ := os.Open("data/sample.txt")
+		sc.AddFrom(in)
+	```
+	2. Or add words manually:
+	```go
+		sc.AddMany([]string{"lock", "stock", "and", "two", "smoking"})
+		sc.Add("barrels")
+	```
+
+3. Use the spellchecker:
+	1. Check if a word is correct:
+	```go
+		result := sc.IsCorrect("stock")
+		fmt.Println(result) // true
+	```
+	2. Suggest corrections:
+	```go
+		// Find up to 10 suggestions for a word
+		matches := sc.Suggest(nil, "rang", 10)
+		fmt.Println(matches) // [range, orange]
+	```
+### Options
 
 ### Options
 
-See [options.go](./options.go) for the list of available options.
+The spellchecker supports customizable options for both searching/suggesting corrections and adding words to the dictionary.
+
+#### Search/Suggestion Options
+
+These options are passed to the `Suggest` method (or to `SuggestWith...` helpers).
+
+- **`SuggestWithMaxErrors(maxErrors int)`**  
+  Sets the maximum allowed edit distance (in "bits") between the input word and dictionary candidates.  
+  - Deletion: 1 bit (e.g., "proble" → "problem")  
+  - Insertion: 1 bit (e.g., "problemm" → "problem")  
+  - Substitution: 2 bits (e.g., "problam" → "problem")  
+  - Transposition: 0 bits (e.g., "problme" → "problem")  
+
+  Default: `2`.
+  Increasing this value beyond 2 is not recommended as it can significantly degrade performance.
+
+- **`SuggestWithFilterFunc(f FilterFunc)`**  
+  Replaces the default scoring/filtering function with a custom one.  
+  The function receives:
+  - `src`: runes of the input word
+  - `candidate`: runes of the dictionary word
+  - `count`: frequency count of the candidate in the dictionary
+
+  It must return:
+  - a `float64` score (higher = better suggestion)
+  - a `bool` indicating whether the candidate should be kept
+
+  The default filter uses Levenshtein distance (with costs: insert/delete=1, substitute=1, transpose=1), filters out candidates exceeding `maxErrors`, and boosts score based on word frequency and shared prefix/suffix length.
+
+Example usage:
+```go
+matches := sc.Suggest(
+	"rang",
+	10,
+	spellchecker.SuggestWithMaxErrors(1),
+	spellchecker.SuggestWithFilterFunc(myCustomFilter),
+)
+```
+
+#### Add Options
+These options are passed to `Add`, `AddMany`, or `AddFrom`.
+
+- **`AddWithWeight(weight uint)`**
+  Sets the frequency weight for added word(s). Higher weight increases the chance that the word will appear higher in suggestion results.
+  Default: 1.
+- **`AddWithSplitter(splitter bufio.SplitFunc)`**
+  Customizes how AddFrom(reader) splits the input stream into words.
+
+  The default splitter:
+    - Uses bufio.ScanWords as base
+    - Converts to lowercase
+    - Keeps only sequences matching [-\pL]+ (letters and hyphens)
+
+Example:
+```go
+sc.AddFrom(
+	file,
+	spellchecker.AddWithWeight(10),          // these words are very common
+	spellchecker.AddWithSplitter(customSplitter),
+)
+
+sc.AddMany([]string{"hello", "world"},
+	spellchecker.AddWithWeight(5),
+)
+```
 
 ### Save/load
 
@@ -100,26 +154,6 @@ See [options.go](./options.go) for the list of available options.
 		panic(err)
 	}
 ```
-
-### Custom score function
-
-You can provide a custom scoring function if needed:
-
-```go
-	var fn spellchecker.FilterFunc = func(src, candidate []rune, cnt int) (float64, bool) {
-		// you can calculate Levenshtein distance here (see defaultFilterFunc in options.go for example)
-
-		return 1.0, true // constant score
-	}
-
-	sc, err := spellchecker.New("abc", spellchecker.WithFilterFunc(fn))
-	if err != nil {
-		// handle err
-	}
-
-	sc.Fix(fn, "word")
-```
-
 
 ## Benchmarks
 
