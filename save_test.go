@@ -9,6 +9,8 @@ import (
 )
 
 func Test_Spellchecker_Save(t *testing.T) {
+	t.Parallel()
+
 	m1 := newSampleSpellchecker()
 
 	filePath := path.Join(t.TempDir(), "spellchecker.bin")

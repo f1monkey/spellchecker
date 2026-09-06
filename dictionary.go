@@ -62,12 +62,13 @@ func (d *dictionary) add(word string, n uint) uint32 {
 	return id
 }
 
-// inc increase word occurence counter
+// inc increase word occurrence counter
 func (d *dictionary) inc(id uint32, n uint) {
 	_, ok := d.counts[id]
 	if !ok {
 		return
 	}
+
 	d.counts[id] += n
 }
 
@@ -89,12 +90,14 @@ func (d *dictionary) find(word string, n int, maxErrors int, fn FilterFunc) []Ma
 	// check for transposition or exact match and do early termination if found
 	// (the most common mistake is a transposition of letters)
 	d.fillWithCandidates(result, wordRunes, sum(bmSrc), fn)
+
 	if result.Len() != 0 {
 		return result.DrainSorted()
 	}
 
-	bitmaps := bitmapsPool.Get().(map[uint64]struct{})
+	bitmaps := bitmapsPool.Get().(map[uint64]struct{}) //nolint:forcetypeassert
 	d.computeCandidateBitmaps(bitmaps, bmSrc, maxErrors)
+
 	for bm := range bitmaps {
 		d.fillWithCandidates(result, wordRunes, bm, fn)
 	}
@@ -106,6 +109,7 @@ func (d *dictionary) find(word string, n int, maxErrors int, fn FilterFunc) []Ma
 
 func (d *dictionary) computeCandidateBitmaps(bitmaps map[uint64]struct{}, src bitmap.Bitmap32, maxFlips int) {
 	var dfs func(bm bitmap.Bitmap32, level, start int)
+
 	dfs = func(bm bitmap.Bitmap32, level, start int) {
 		key := sum(bm)
 		if len(d.index[key]) > 0 {
@@ -168,8 +172,8 @@ func (d *dictionary) MarshalBinary() ([]byte, error) {
 	}
 
 	buf := &bytes.Buffer{}
-	err := gob.NewEncoder(buf).Encode(data)
-	if err != nil {
+
+	if err := gob.NewEncoder(buf).Encode(data); err != nil {
 		return nil, err
 	}
 
@@ -178,6 +182,7 @@ func (d *dictionary) MarshalBinary() ([]byte, error) {
 
 func (d *dictionary) UnmarshalBinary(data []byte) error {
 	dictData := &dictData{}
+
 	err := gob.NewDecoder(bytes.NewBuffer(data)).Decode(dictData)
 	if err != nil {
 		return err
@@ -195,6 +200,7 @@ func (d *dictionary) UnmarshalBinary(data []byte) error {
 			max = id
 		}
 	}
+
 	d.nextID = idSeq(max)
 
 	return nil
@@ -207,8 +213,11 @@ func idSeq(start uint32) func() uint32 {
 }
 
 func sum(b bitmap.Bitmap32) uint64 {
-	var result uint64
-	var mult uint64 = 1
+	var (
+		result uint64
+		mult   uint64 = 1
+	)
+
 	for i := range b {
 		result += uint64(b[i]) * mult
 		mult *= 10
@@ -226,7 +235,7 @@ func releaseBitmaps(m map[uint64]struct{}) {
 }
 
 var bitmapsPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return make(map[uint64]struct{}, 256)
 	},
 }

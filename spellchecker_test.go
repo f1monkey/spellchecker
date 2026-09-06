@@ -13,6 +13,7 @@ import (
 
 func loadFullSpellchecker() *Spellchecker {
 	var s *Spellchecker
+
 	ff, err := os.Open("data/spellchecker.bin")
 	if !errors.Is(err, os.ErrNotExist) {
 		s, err = Load(ff)
@@ -22,6 +23,7 @@ func loadFullSpellchecker() *Spellchecker {
 	}
 
 	s = newFullSpellchecker()
+
 	dst, err := os.Create("data/spellchecker.bin")
 	if err != nil {
 		panic(err)
@@ -74,7 +76,7 @@ func newSampleSpellchecker() *Spellchecker {
 }
 
 func Benchmark_Spellchecker_AddFrom(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		newFullSpellchecker()
 	}
 }
@@ -83,7 +85,8 @@ func Benchmark_Spellchecker_IsCorrect(b *testing.B) {
 	m := loadFullSpellchecker()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		m.IsCorrect("tea")
 	}
 }
@@ -92,7 +95,8 @@ func Benchmark_Spellchecker_Suggest_3(b *testing.B) {
 	m := loadFullSpellchecker()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		m.Suggest("tee", 5)
 	}
 }
@@ -101,7 +105,8 @@ func Benchmark_Spellchecker_Fix_6_Transposition(b *testing.B) {
 	m := loadFullSpellchecker()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		m.Suggest("oragne", 5)
 	}
 }
@@ -110,7 +115,8 @@ func Benchmark_Spellchecker_Fix_6_Replacement(b *testing.B) {
 	m := loadFullSpellchecker()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		m.Suggest("problam", 5)
 	}
 }
@@ -129,25 +135,28 @@ type benchmarkNorvigItem struct {
 }
 
 func benchmarkNorvig(b *testing.B, dataPath string) {
+	b.Helper()
+
 	b.StopTimer()
 	b.ResetTimer()
+
 	m := loadFullSpellchecker()
 
 	testData, err := os.Open(dataPath)
 	if err != nil {
 		panic(err)
 	}
+
 	scanner := bufio.NewScanner(testData)
 	scanner.Split(bufio.ScanLines)
 
 	var data []benchmarkNorvigItem
-	for {
-		if !scanner.Scan() {
-			break
-		}
+
+	for scanner.Scan() {
 		if err := scanner.Err(); err != nil {
 			panic(err)
 		}
+
 		line := scanner.Text()
 
 		parts := strings.Split(line, ":")
@@ -162,7 +171,8 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 
 	total := 0
 	ok := 0
-	for i := 0; i < b.N; i++ {
+
+	for i := range b.N {
 		for _, item := range data {
 			for _, word := range item.words {
 				if word == "" {
@@ -170,11 +180,14 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 				}
 
 				b.StartTimer()
+
 				result := m.Suggest(word, 10)
+
 				b.StopTimer()
 
 				if i == 0 {
 					total++
+
 					if result.ExactMatch && word == item.expected {
 						ok++
 						continue
@@ -197,6 +210,7 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 				}
 			}
 		}
+
 		b.ReportMetric(float64(ok), "success_words")
 		b.ReportMetric(float64(total), "total_words")
 		b.ReportMetric(float64(ok)/float64(total)*100, "success_percent")
@@ -204,12 +218,16 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 }
 
 func Test_NewSpellchecker(t *testing.T) {
+	t.Parallel()
+
 	s, err := New(DefaultAlphabet)
 	require.NoError(t, err)
 	require.NotNil(t, s.dict)
 }
 
 func Test_Spellchecker_IsCorrect(t *testing.T) {
+	t.Parallel()
+
 	s := newSampleSpellchecker()
 
 	assert.True(t, s.IsCorrect("orange"))

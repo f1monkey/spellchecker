@@ -7,15 +7,21 @@ import (
 )
 
 func Test_dictionary_id(t *testing.T) {
+	t.Parallel()
+
 	dict, err := newDictionary(DefaultAlphabet)
 	require.NoError(t, err)
 
 	t.Run("must return 0 for unexisting word", func(t *testing.T) {
+		t.Parallel()
+
 		id := dict.id("word")
 		require.Equal(t, uint32(0), id)
 	})
 
 	t.Run("must return id for unexisting word", func(t *testing.T) {
+		t.Parallel()
+
 		dict.ids["word"] = 1
 		id := dict.id("word")
 		require.Equal(t, uint32(1), id)
@@ -23,7 +29,11 @@ func Test_dictionary_id(t *testing.T) {
 }
 
 func Test_dictionary_add(t *testing.T) {
+	t.Parallel()
+
 	t.Run("must add word to dictionary index", func(t *testing.T) {
+		t.Parallel()
+
 		dict, err := newDictionary(DefaultAlphabet)
 		require.NoError(t, err)
 
@@ -46,14 +56,20 @@ func Test_dictionary_add(t *testing.T) {
 }
 
 func Test_Dictionary_Inc(t *testing.T) {
+	t.Parallel()
+
 	t.Run("must increase counter value", func(t *testing.T) {
+		t.Parallel()
+
 		dict, err := newDictionary(DefaultAlphabet)
-		dict.counts[1] = 0
 		require.NoError(t, err)
 
+		dict.counts[1] = 0
 		require.Equal(t, uint(0), dict.counts[1])
 		require.Equal(t, uint(0), dict.counts[2])
+
 		dict.inc(1, 100)
+
 		require.Equal(t, uint(100), dict.counts[1])
 		require.Equal(t, uint(0), dict.counts[2])
 	})

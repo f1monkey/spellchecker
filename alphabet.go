@@ -22,6 +22,7 @@ func newAlphabet(str string) (alphabet, error) {
 		if _, ok := result[s]; ok {
 			return nil, fmt.Errorf("duplicate symbol %q at position %d", s, i)
 		}
+
 		result[s] = uint32(i)
 	}
 
@@ -30,6 +31,7 @@ func newAlphabet(str string) (alphabet, error) {
 
 func (a alphabet) encode(word []rune) bitmap.Bitmap32 {
 	var b bitmap.Bitmap32
+
 	for _, letter := range word {
 		if index, ok := a[letter]; ok {
 			b.Set(index)

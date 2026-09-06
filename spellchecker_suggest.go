@@ -73,13 +73,15 @@ var defaultSearchOptions = searchOptions{
 }
 
 func defaultFilterFunc(maxErrors int) FilterFunc {
+	const prefixCoefficitent = 1.5
+
 	return func(src, candidate []rune, count uint) (float64, bool) {
 		distance, prefixLen, suffixLen := levenshtein.Calculate(src, candidate, 0, 1, 1, 1)
 		if distance > maxErrors {
 			return 0, false
 		}
 
-		mult := math.Log1p(float64(count)) * math.Pow(1.5, float64(prefixLen+suffixLen))
+		mult := math.Log1p(float64(count)) * math.Pow(prefixCoefficitent, float64(prefixLen+suffixLen))
 
 		return 1 / (1 + float64(distance*distance)) * mult, true
 	}

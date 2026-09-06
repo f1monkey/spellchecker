@@ -8,7 +8,11 @@ import (
 )
 
 func Test_Spellchecker_AddFrom(t *testing.T) {
+	t.Parallel()
+
 	t.Run("no options", func(t *testing.T) {
+		t.Parallel()
+
 		sc, err := New("abc")
 		require.NoError(t, err)
 
@@ -24,6 +28,8 @@ func Test_Spellchecker_AddFrom(t *testing.T) {
 	})
 
 	t.Run("custom weight", func(t *testing.T) {
+		t.Parallel()
+
 		sc, err := New("abc")
 		require.NoError(t, err)
 
@@ -40,6 +46,8 @@ func Test_Spellchecker_AddFrom(t *testing.T) {
 	})
 
 	t.Run("custom splitter", func(t *testing.T) {
+		t.Parallel()
+
 		sc, err := New("abc")
 		require.NoError(t, err)
 
@@ -61,7 +69,11 @@ func Test_Spellchecker_AddFrom(t *testing.T) {
 }
 
 func Test_Spellchecker_AddMany(t *testing.T) {
+	t.Parallel()
+
 	t.Run("no options", func(t *testing.T) {
+		t.Parallel()
+
 		sc, err := New("abc")
 		require.NoError(t, err)
 
@@ -75,6 +87,8 @@ func Test_Spellchecker_AddMany(t *testing.T) {
 	})
 
 	t.Run("custom weight", func(t *testing.T) {
+		t.Parallel()
+
 		sc, err := New("abc")
 		require.NoError(t, err)
 
@@ -89,7 +103,11 @@ func Test_Spellchecker_AddMany(t *testing.T) {
 }
 
 func Test_Spellchecker_Add(t *testing.T) {
+	t.Parallel()
+
 	t.Run("no options", func(t *testing.T) {
+		t.Parallel()
+
 		sc, err := New("abc")
 		require.NoError(t, err)
 
@@ -101,6 +119,8 @@ func Test_Spellchecker_Add(t *testing.T) {
 	})
 
 	t.Run("custom weight", func(t *testing.T) {
+		t.Parallel()
+
 		sc, err := New("abc")
 		require.NoError(t, err)
 

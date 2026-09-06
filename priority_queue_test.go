@@ -7,7 +7,11 @@ import (
 )
 
 func Test_priorityQueue(t *testing.T) {
+	t.Parallel()
+
 	t.Run("must sort elements by score descending", func(t *testing.T) {
+		t.Parallel()
+
 		pq := newPriorityQueue(10)
 		pq.Push(Match{
 			Value: "foo",
@@ -39,7 +43,11 @@ func Test_priorityQueue(t *testing.T) {
 	})
 
 	t.Run("must remove an element with the lowest score if out of capacity", func(t *testing.T) {
+		t.Parallel()
+
 		t.Run("2", func(t *testing.T) {
+			t.Parallel()
+
 			pq := newPriorityQueue(2)
 			pq.Push(Match{
 				Value: "foo",
@@ -66,6 +74,8 @@ func Test_priorityQueue(t *testing.T) {
 			}, pq.items)
 		})
 		t.Run("1", func(t *testing.T) {
+			t.Parallel()
+
 			pq := newPriorityQueue(1)
 			pq.Push(Match{
 				Value: "foo",

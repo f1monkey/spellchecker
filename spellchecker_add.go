@@ -33,6 +33,7 @@ func (m *Spellchecker) AddFrom(input io.Reader, opts ...AddOptionFunc) error {
 
 	words := make([]string, 1000)
 	i := 0
+
 	for item := range readInput(input, addOpts.splitter) {
 		if item.err != nil {
 			return item.err
@@ -40,8 +41,10 @@ func (m *Spellchecker) AddFrom(input io.Reader, opts ...AddOptionFunc) error {
 
 		if i == len(words) {
 			m.addMany(words, addOpts.weight)
+
 			i = 0
 		}
+
 		words[i] = item.word
 		i++
 	}
@@ -111,6 +114,7 @@ func defaultSplitter(data []byte, atEOF bool) (advance int, token []byte, err er
 	if err != nil {
 		return
 	}
+
 	token = bytes.ToLower(token)
 
 	return advance, wordSymbols.Find(token), nil

@@ -21,14 +21,13 @@ func readInput(input io.Reader, splitter bufio.SplitFunc) <-chan readData {
 
 	go func() {
 		defer close(ch)
-		for {
-			if !scanner.Scan() {
-				break
-			}
+
+		for scanner.Scan() {
 			if err := scanner.Err(); err != nil {
 				ch <- readData{err: err}
 				return
 			}
+
 			ch <- readData{word: scanner.Text()}
 		}
 	}()

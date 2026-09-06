@@ -24,25 +24,25 @@ func (pq priorityQueue) Swap(i, j int) {
 	pq.items[i], pq.items[j] = pq.items[j], pq.items[i]
 }
 
-func (pq *priorityQueue) Push(x interface{}) {
-	item := x.(Match)
+func (pq *priorityQueue) Push(x any) {
+	item := x.(Match) //nolint:forcetypeassert
 
 	if len(pq.items) < pq.capacity {
 		pq.items = append(pq.items, item)
 		heap.Fix(pq, len(pq.items)-1)
+
 		return
 	}
 
 	if item.Score < pq.items[0].Score {
 		return
-
 	}
 
 	pq.items[0] = item
 	heap.Fix(pq, 0)
 }
 
-func (pq *priorityQueue) Pop() interface{} {
+func (pq *priorityQueue) Pop() any {
 	old := pq.items
 	n := len(old)
 	item := old[n-1]
@@ -55,7 +55,7 @@ func (pq *priorityQueue) DrainSorted() []Match {
 	out := make([]Match, pq.Len())
 
 	for i := len(out) - 1; i >= 0; i-- {
-		out[i] = heap.Pop(pq).(Match)
+		out[i] = heap.Pop(pq).(Match) //nolint:forcetypeassert
 	}
 
 	return out
