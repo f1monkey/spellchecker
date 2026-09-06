@@ -21,8 +21,8 @@ type dictionary struct {
 	index map[uint64][]uint32
 }
 
-func newDictionary(ab string) (*dictionary, error) {
-	alphabet, err := newAlphabet(ab)
+func newDictionary(ab ...Alphabet) (*dictionary, error) {
+	alphabet, err := newAlphabet(ab...)
 	if err != nil {
 		return nil, err
 	}

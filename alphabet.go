@@ -6,24 +6,38 @@ import (
 	"github.com/f1monkey/bitmap"
 )
 
-const DefaultAlphabet = "abcdefghijklmnopqrstuvwxyz"
+type Alphabet = string
+
+const (
+	EN      Alphabet = "abcdefghijklmnopqrstuvwxyz"
+	RU      Alphabet = "абвгдеёжзийклмнопрстуфхцчшщъыьэюя"
+	Numbers Alphabet = "1234567890"
+)
+
+const DefaultAlphabet = EN
 
 type alphabet map[rune]uint32
 
 // newAlphabet create a new alphabet instance
-func newAlphabet(str string) (alphabet, error) {
-	runes := []rune(str)
-	if len(runes) == 0 {
-		return nil, fmt.Errorf("unable to use empty string as an alphabet")
-	}
+func newAlphabet(strings ...Alphabet) (alphabet, error) {
+	result := make(alphabet)
 
-	result := make(alphabet, len(runes))
-	for i, s := range runes {
-		if _, ok := result[s]; ok {
-			return nil, fmt.Errorf("duplicate symbol %q at position %d", s, i)
+	var runes []rune
+
+	for _, str := range strings {
+		if len(str) == 0 {
+			return nil, fmt.Errorf("unable to use empty string as an alphabet")
 		}
 
-		result[s] = uint32(i)
+		runes = append(runes, []rune(str)...)
+	}
+
+	for i, r := range runes {
+		if _, ok := result[r]; ok {
+			return nil, fmt.Errorf("duplicate symbol %q at position %d", r, i)
+		}
+
+		result[r] = uint32(i)
 	}
 
 	return result, nil

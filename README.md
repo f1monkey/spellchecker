@@ -6,14 +6,15 @@
 Yet another spellchecker written in go.
 
 - [Spellchecker](#spellchecker)
-	- [Features:](#features)
-	- [Installation](#installation)
-	- [Usage](#usage)
-	- [Benchmarks](#benchmarks)
-		- [Test set 1:](#test-set-1)
-		- [Test set 2:](#test-set-2)
+  - [Features:](#features)
+  - [Installation](#installation)
+  - [Usage](#usage)
+  - [Benchmarks](#benchmarks)
+    - [Test set 1:](#test-set-1)
+    - [Test set 2:](#test-set-2)
 
 ## Features:
+
 - very compact database: ~1 MB for 30,000 unique words
 - average time to fix a single word: ~35 µs
 - achieves about 70–74% accuracy on Peter Norvig’s test sets (see [benchmarks](#benchmarks))
@@ -27,7 +28,6 @@ go get -v github.com/f1monkey/spellchecker/v3
 
 ## Usage
 
-
 ### Quick start
 
 1. Initialize the spellchecker. You need to pass an alphabet: a set of allowed characters that will be used for indexing and primary word checks. (All other characters will be ignored for these operations.)
@@ -35,35 +35,41 @@ go get -v github.com/f1monkey/spellchecker/v3
 ```go
 	// Create a new instance
 	sc, err := spellchecker.New(
-		"abcdefghijklmnopqrstuvwxyz1234567890", // allowed symbols, other symbols will be ignored
+		spellchecker.EN, spellchecker.Numbers, // allowed symbols, other symbols will be ignored
+		// OR you can pass a string like "abcdefghijklmnopqrstuvwxyz1234567890"
 	)
 ```
 
 2. Add some words to the dictionary:
-	1. from any `io.Reader`:
-	```go
-		in, _ := os.Open("data/sample.txt")
-		sc.AddFrom(in)
-	```
-	2. Or add words manually:
-	```go
-		sc.AddMany([]string{"lock", "stock", "and", "two", "smoking"})
-		sc.Add("barrels")
-	```
+   1. from any `io.Reader`:
+
+   ```go
+   	in, _ := os.Open("data/sample.txt")
+   	sc.AddFrom(in)
+   ```
+
+   2. Or add words manually:
+
+   ```go
+   	sc.AddMany([]string{"lock", "stock", "and", "two", "smoking"})
+   	sc.Add("barrels")
+   ```
 
 3. Use the spellchecker:
-	1. Check if a word is correct:
-	```go
-		result := sc.IsCorrect("stock")
-		fmt.Println(result) // true
-	```
-	2. Suggest corrections:
-	```go
-		// Find up to 10 suggestions for a word
-		matches := sc.Suggest(nil, "rang", 10)
-		fmt.Println(matches) // [range, orange]
-	```
-### Options
+   1. Check if a word is correct:
+
+   ```go
+   	result := sc.IsCorrect("stock")
+   	fmt.Println(result) // true
+   ```
+
+   2. Suggest corrections:
+
+   ```go
+   	// Find up to 10 suggestions for a word
+   	matches := sc.Suggest(nil, "rang", 10)
+   	fmt.Println(matches) // [range, orange]
+   ```
 
 ### Options
 
@@ -74,11 +80,11 @@ The spellchecker supports customizable options for both searching/suggesting cor
 These options are passed to the `Suggest` method (or to `SuggestWith...` helpers).
 
 - **`SuggestWithMaxErrors(maxErrors int)`**  
-  Sets the maximum allowed edit distance (in "bits") between the input word and dictionary candidates.  
-  - Deletion: 1 bit (e.g., "proble" → "problem")  
-  - Insertion: 1 bit (e.g., "problemm" → "problem")  
-  - Substitution: 2 bits (e.g., "problam" → "problem")  
-  - Transposition: 0 bits (e.g., "problme" → "problem")  
+  Sets the maximum allowed edit distance (in "bits") between the input word and dictionary candidates.
+  - Deletion: 1 bit (e.g., "proble" → "problem")
+  - Insertion: 1 bit (e.g., "problemm" → "problem")
+  - Substitution: 2 bits (e.g., "problam" → "problem")
+  - Transposition: 0 bits (e.g., "problme" → "problem")
 
   Default: `2`.
   Increasing this value beyond 2 is not recommended as it can significantly degrade performance.
@@ -97,6 +103,7 @@ These options are passed to the `Suggest` method (or to `SuggestWith...` helpers
   The default filter uses Levenshtein distance (with costs: insert/delete=1, substitute=1, transpose=1), filters out candidates exceeding `maxErrors`, and boosts score based on word frequency and shared prefix/suffix length.
 
 Example usage:
+
 ```go
 matches := sc.Suggest(
 	"rang",
@@ -107,6 +114,7 @@ matches := sc.Suggest(
 ```
 
 #### Add Options
+
 These options are passed to `Add`, `AddMany`, or `AddFrom`.
 
 - **`AddWithWeight(weight uint)`**
@@ -116,11 +124,12 @@ These options are passed to `Add`, `AddMany`, or `AddFrom`.
   Customizes how AddFrom(reader) splits the input stream into words.
 
   The default splitter:
-    - Uses bufio.ScanWords as base
-    - Converts to lowercase
-    - Keeps only sequences matching [-\pL]+ (letters and hyphens)
+  - Uses bufio.ScanWords as base
+  - Converts to lowercase
+  - Keeps only sequences matching [-\pL]+ (letters and hyphens)
 
 Example:
+
 ```go
 sc.AddFrom(
 	file,

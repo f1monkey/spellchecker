@@ -10,8 +10,8 @@ type Spellchecker struct {
 	dict *dictionary
 }
 
-func New(alphabet string) (*Spellchecker, error) {
-	dict, err := newDictionary(alphabet)
+func New(alphabets ...Alphabet) (*Spellchecker, error) {
+	dict, err := newDictionary(alphabets...)
 	if err != nil {
 		return nil, err
 	}
