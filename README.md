@@ -76,7 +76,7 @@ go get -v github.com/f1monkey/spellchecker/v3
 
 These options are passed to `Suggest`.
 
-- **`SuggestWithMaxErrors(maxErrors int)`**  
+- **`WithMaxErrors(maxErrors int)`**
   Sets the maximum allowed difference in bits between the input word and dictionary candidates.
   - Deletion: 1 bit (e.g., "proble" → "problem")
   - Insertion: 1 bit (e.g., "problemm" → "problem")
@@ -86,7 +86,7 @@ These options are passed to `Suggest`.
   Default: `2`.
   Increasing this value beyond 2 is not recommended as it can significantly degrade performance.
 
-- **`SuggestWithFilterFunc(f FilterFunc)`**  
+- **`WithFilterFunc(f FilterFunc)`**
   Replaces the default scoring/filtering function with a custom one.  
   The function receives:
   - `src`: runes of the input word
@@ -105,8 +105,8 @@ Example usage:
 result := sc.Suggest(
 	"rang",
 	10,
-	spellchecker.SuggestWithMaxErrors(1),
-	spellchecker.SuggestWithFilterFunc(myCustomFilter),
+	spellchecker.WithMaxErrors(1),
+	spellchecker.WithFilterFunc(myCustomFilter),
 )
 ```
 

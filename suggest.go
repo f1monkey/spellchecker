@@ -13,9 +13,9 @@ const DefaultMaxErrors = 2
 // If the flag is false, the candidate will be completely filtered out.
 type FilterFunc func(src, candidate []rune, count uint) (float64, bool)
 
-type SearchOptionFunc func(opts *searchOptions)
+type OptionFunc func(opts *searchOptions)
 
-// SuggestWithMaxErrors sets the maximum allowed difference in bits
+// WithMaxErrors sets the maximum allowed difference in bits
 // between the "search word" and a "dictionary word".
 // - deletion is a 1-bit change (proble → problem)
 // - insertion is a 1-bit change (problemm → problem)
@@ -24,14 +24,14 @@ type SearchOptionFunc func(opts *searchOptions)
 //
 // It is not recommended to set this value greater than 2,
 // as it can significantly affect performance.
-func SuggestWithMaxErrors(maxErrors int) SearchOptionFunc {
+func WithMaxErrors(maxErrors int) OptionFunc {
 	return func(opts *searchOptions) {
 		opts.maxErrors = maxErrors
 	}
 }
 
-// SuggestWithFilterFunc set a FilterFunc
-func SuggestWithFilterFunc(f FilterFunc) SearchOptionFunc {
+// WithFilterFunc set a FilterFunc
+func WithFilterFunc(f FilterFunc) OptionFunc {
 	return func(opts *searchOptions) {
 		opts.filterFunc = f
 	}
@@ -44,7 +44,7 @@ type SuggestionResult struct {
 
 // Suggest find top n suggestions for the word.
 // Returns spellchecker scores along with words
-func (s *Spellchecker) Suggest(word string, n int, opts ...SearchOptionFunc) SuggestionResult {
+func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) SuggestionResult {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 

@@ -2,7 +2,6 @@ package spellchecker
 
 import (
 	"bufio"
-	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -152,55 +151,57 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 	}
 }
 
-func loadFullSpellchecker(t testing.TB) *Spellchecker {
-	t.Helper()
+func loadFullSpellchecker(tb testing.TB) *Spellchecker {
+	tb.Helper()
 
 	var s *Spellchecker
 
 	ff, err := os.Open("data/spellchecker.bin")
-	if !errors.Is(err, os.ErrNotExist) {
+	if err == nil {
 		s, err = Load(ff, NewWhitespaceTokenizer())
-		require.NoError(t, err)
+		require.NoError(tb, err)
+
+		return s
 	}
 
-	s = newFullSpellchecker(t)
+	s = newFullSpellchecker(tb)
 
 	dst, err := os.Create("data/spellchecker.bin")
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	err = s.Save(dst)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return s
 }
 
-func newFullSpellchecker(t testing.TB) *Spellchecker {
-	t.Helper()
+func newFullSpellchecker(tb testing.TB) *Spellchecker {
+	tb.Helper()
 
 	s, err := New(NewWhitespaceTokenizer(), DefaultAlphabet)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
-	s.AddPhrases(strings.ToLower(string(mustReadFile(t, "data/big.txt"))))
+	s.AddPhrases(strings.ToLower(string(mustReadFile(tb, "data/big.txt"))))
 
 	return s
 }
 
-func newSampleSpellchecker(t testing.TB) *Spellchecker {
-	t.Helper()
+func newSampleSpellchecker(tb testing.TB) *Spellchecker {
+	tb.Helper()
 
 	s, err := New(NewWhitespaceTokenizer(), DefaultAlphabet)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
-	s.AddPhrases(strings.ToLower(string(mustReadFile(t, "data/sample.txt"))))
+	s.AddPhrases(strings.ToLower(string(mustReadFile(tb, "data/sample.txt"))))
 
 	return s
 }
 
-func mustReadFile(t testing.TB, path string) []byte {
-	t.Helper()
+func mustReadFile(tb testing.TB, path string) []byte {
+	tb.Helper()
 
 	b, err := os.ReadFile(path)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return b
 }
