@@ -12,7 +12,7 @@ func Test_Spellchecker_SuggestScore(t *testing.T) {
 	t.Run("fix", func(t *testing.T) {
 		t.Parallel()
 
-		s := newSampleSpellchecker()
+		s := newSampleSpellchecker(t)
 		result := s.Suggest("arang", 5)
 		require.Equal(t, SuggestionResult{
 			Suggestions: []Match{
@@ -25,7 +25,7 @@ func Test_Spellchecker_SuggestScore(t *testing.T) {
 	t.Run("custom max errors", func(t *testing.T) {
 		t.Parallel()
 
-		s := newSampleSpellchecker()
+		s := newSampleSpellchecker(t)
 		result := s.Suggest("arang", 5, SuggestWithMaxErrors(1))
 		require.Equal(t, SuggestionResult{
 			Suggestions: []Match{
@@ -45,7 +45,7 @@ func Test_Spellchecker_SuggestScore(t *testing.T) {
 	t.Run("valid word", func(t *testing.T) {
 		t.Parallel()
 
-		s := newSampleSpellchecker()
+		s := newSampleSpellchecker(t)
 		result := s.Suggest("orange", 5)
 		require.Equal(t, SuggestionResult{ExactMatch: true}, result)
 	})
@@ -53,7 +53,7 @@ func Test_Spellchecker_SuggestScore(t *testing.T) {
 	t.Run("unknown word", func(t *testing.T) {
 		t.Parallel()
 
-		s := newSampleSpellchecker()
+		s := newSampleSpellchecker(t)
 		result := s.Suggest("qwerty", 5)
 		require.Equal(t, SuggestionResult{Suggestions: []Match{}}, result)
 	})

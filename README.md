@@ -1,6 +1,6 @@
 # Spellchecker
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/f1monkey/spellchecker.svg)](https://pkg.go.dev/github.com/f1monkey/spellchecker/v3)
+[![Go Reference](https://pkg.go.dev/badge/github.com/f1monkey/spellchecker.svg)](https://pkg.go.dev/badge/github.com/f1monkey/spellchecker/v3)
 [![CI](https://github.com/f1monkey/spellchecker/actions/workflows/test.yaml/badge.svg)](https://github.com/f1monkey/spellchecker/actions/workflows/test.yaml)
 
 Yet another spellchecker written in go.
@@ -30,29 +30,31 @@ go get -v github.com/f1monkey/spellchecker/v3
 
 ### Quick start
 
-1. Initialize the spellchecker. You need to pass an alphabet: a set of allowed characters that will be used for indexing and primary word checks. (All other characters will be ignored for these operations.)
+1. Initialize the spellchecker. Pass a tokenizer and one or more alphabets: sets of allowed characters used for indexing and lookup. Characters outside the alphabet are ignored for these operations.
 
 ```go
-	// Create a new instance
 	sc, err := spellchecker.New(
-		spellchecker.EN, spellchecker.Numbers, // allowed symbols, other symbols will be ignored
-		// OR you can pass a string like "abcdefghijklmnopqrstuvwxyz1234567890"
+		spellchecker.NewWhitespaceTokenizer(), // or NewStandardTokenizer()/NewRegexpTokenizer()
+		spellchecker.EN, spellchecker.Numbers, // or a custom string like "abcdefghijklmnopqrstuvwxyz1234567890"
 	)
 ```
 
-2. Add some words to the dictionary:
-   1. from any `io.Reader`:
+`NewWhitespaceTokenizer` splits on Unicode whitespace (like Elasticsearch `whitespace`).
+`NewStandardTokenizer` approximates Elasticsearch `standard`: it keeps letters, digits, underscores and in-word apostrophes, and splits on hyphens and other punctuation. You can also implement `Tokenizer` inteface or use `NewRegexpTokenizer`.
+
+2. Add words to the dictionary:
+   1. Whole words (no splitting):
 
    ```go
-   	in, _ := os.Open("data/sample.txt")
-   	sc.AddFrom(in)
+   	sc.Add("lock", "stock", "barrels")
+   	sc.AddWeight(5, "hello", "world") // higher weight ranks the word higher in suggestions
    ```
 
-   2. Or add words manually:
+   2. Phrases — tokenized with the tokenizer from `New`:
 
    ```go
-   	sc.AddMany([]string{"lock", "stock", "and", "two", "smoking"})
-   	sc.Add("barrels")
+   	sc.AddPhrases("lock stock and two smoking barrels")
+   	sc.AddPhraseWeight(10, "very common phrase")
    ```
 
 3. Use the spellchecker:
@@ -66,21 +68,16 @@ go get -v github.com/f1monkey/spellchecker/v3
    2. Suggest corrections:
 
    ```go
-   	// Find up to 10 suggestions for a word
-   	matches := sc.Suggest(nil, "rang", 10)
-   	fmt.Println(matches) // [range, orange]
+   	result := sc.Suggest("rang", 10)
+   	fmt.Println(result.Suggestions) // [{range ...} {orange ...}]
    ```
 
 ### Options
 
-The spellchecker supports customizable options for both searching/suggesting corrections and adding words to the dictionary.
-
-#### Search/Suggestion Options
-
-These options are passed to the `Suggest` method (or to `SuggestWith...` helpers).
+These options are passed to `Suggest`.
 
 - **`SuggestWithMaxErrors(maxErrors int)`**  
-  Sets the maximum allowed edit distance (in "bits") between the input word and dictionary candidates.
+  Sets the maximum allowed difference in bits between the input word and dictionary candidates.
   - Deletion: 1 bit (e.g., "proble" → "problem")
   - Insertion: 1 bit (e.g., "problemm" → "problem")
   - Substitution: 2 bits (e.g., "problam" → "problem")
@@ -105,7 +102,7 @@ These options are passed to the `Suggest` method (or to `SuggestWith...` helpers
 Example usage:
 
 ```go
-matches := sc.Suggest(
+result := sc.Suggest(
 	"rang",
 	10,
 	spellchecker.SuggestWithMaxErrors(1),
@@ -113,39 +110,11 @@ matches := sc.Suggest(
 )
 ```
 
-#### Add Options
-
-These options are passed to `Add`, `AddMany`, or `AddFrom`.
-
-- **`AddWithWeight(weight uint)`**
-  Sets the frequency weight for added word(s). Higher weight increases the chance that the word will appear higher in suggestion results.
-  Default: 1.
-- **`AddWithSplitter(splitter bufio.SplitFunc)`**
-  Customizes how AddFrom(reader) splits the input stream into words.
-
-  The default splitter:
-  - Uses bufio.ScanWords as base
-  - Converts to lowercase
-  - Keeps only sequences matching [-\pL]+ (letters and hyphens)
-
-Example:
-
-```go
-sc.AddFrom(
-	file,
-	spellchecker.AddWithWeight(10),          // these words are very common
-	spellchecker.AddWithSplitter(customSplitter),
-)
-
-sc.AddMany([]string{"hello", "world"},
-	spellchecker.AddWithWeight(5),
-)
-```
-
 ### Save/load
 
 ```go
-	sc, err := spellchecker.New("abc")
+	tok := spellchecker.NewWhitespaceTokenizer()
+	sc, err := spellchecker.New(tok, "abc")
 
 	// Save data to any io.Writer
 	out, err := os.Create("data/out.bin")
@@ -154,12 +123,12 @@ sc.AddMany([]string{"hello", "world"},
 	}
 	sc.Save(out)
 
-	// Load data back from io.Reader
-	in, err = os.Open("data/out.bin")
+	// Load data back from io.Reader (pass a tokenizer for AddPhrases after load)
+	in, err := os.Open("data/out.bin")
 	if err != nil {
 		panic(err)
 	}
-	sc, err = spellchecker.Load(in)
+	sc, err = spellchecker.Load(in, tok)
 	if err != nil {
 		panic(err)
 	}

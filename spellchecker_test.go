@@ -1,226 +1,16 @@
 package spellchecker
 
 import (
-	"bufio"
-	"errors"
-	"os"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func loadFullSpellchecker() *Spellchecker {
-	var s *Spellchecker
-
-	ff, err := os.Open("data/spellchecker.bin")
-	if !errors.Is(err, os.ErrNotExist) {
-		s, err = Load(ff)
-		if err == nil {
-			return s
-		}
-	}
-
-	s = newFullSpellchecker()
-
-	dst, err := os.Create("data/spellchecker.bin")
-	if err != nil {
-		panic(err)
-	}
-
-	err = s.Save(dst)
-	if err != nil {
-		panic(err)
-	}
-
-	return s
-}
-
-func newFullSpellchecker() *Spellchecker {
-	f, err := os.Open("data/big.txt")
-	if err != nil {
-		panic(err)
-	}
-
-	s, err := New(DefaultAlphabet)
-	if err != nil {
-		panic(err)
-	}
-
-	err = s.AddFrom(f)
-	if err != nil {
-		panic(err)
-	}
-
-	return s
-}
-
-func newSampleSpellchecker() *Spellchecker {
-	f, err := os.Open("data/sample.txt")
-	if err != nil {
-		panic(err)
-	}
-
-	s, err := New(DefaultAlphabet)
-	if err != nil {
-		panic(err)
-	}
-
-	err = s.AddFrom(f)
-	if err != nil {
-		panic(err)
-	}
-
-	return s
-}
-
-func Benchmark_Spellchecker_AddFrom(b *testing.B) {
-	for b.Loop() {
-		newFullSpellchecker()
-	}
-}
-
-func Benchmark_Spellchecker_IsCorrect(b *testing.B) {
-	m := loadFullSpellchecker()
-
-	b.ResetTimer()
-
-	for b.Loop() {
-		m.IsCorrect("tea")
-	}
-}
-
-func Benchmark_Spellchecker_Suggest_3(b *testing.B) {
-	m := loadFullSpellchecker()
-
-	b.ResetTimer()
-
-	for b.Loop() {
-		m.Suggest("tee", 5)
-	}
-}
-
-func Benchmark_Spellchecker_Fix_6_Transposition(b *testing.B) {
-	m := loadFullSpellchecker()
-
-	b.ResetTimer()
-
-	for b.Loop() {
-		m.Suggest("oragne", 5)
-	}
-}
-
-func Benchmark_Spellchecker_Fix_6_Replacement(b *testing.B) {
-	m := loadFullSpellchecker()
-
-	b.ResetTimer()
-
-	for b.Loop() {
-		m.Suggest("problam", 5)
-	}
-}
-
-func Benchmark_Norvig1(b *testing.B) {
-	benchmarkNorvig(b, "data/norvig1.txt")
-}
-
-func Benchmark_Norvig2(b *testing.B) {
-	benchmarkNorvig(b, "data/norvig2.txt")
-}
-
-type benchmarkNorvigItem struct {
-	expected string
-	words    []string
-}
-
-func benchmarkNorvig(b *testing.B, dataPath string) {
-	b.Helper()
-
-	b.StopTimer()
-	b.ResetTimer()
-
-	m := loadFullSpellchecker()
-
-	testData, err := os.Open(dataPath)
-	if err != nil {
-		panic(err)
-	}
-
-	scanner := bufio.NewScanner(testData)
-	scanner.Split(bufio.ScanLines)
-
-	var data []benchmarkNorvigItem
-
-	for scanner.Scan() {
-		if err := scanner.Err(); err != nil {
-			panic(err)
-		}
-
-		line := scanner.Text()
-
-		parts := strings.Split(line, ":")
-		required := parts[0]
-		checks := strings.Split(parts[1], " ")
-
-		data = append(data, benchmarkNorvigItem{
-			expected: required,
-			words:    checks,
-		})
-	}
-
-	total := 0
-	ok := 0
-
-	for i := range b.N {
-		for _, item := range data {
-			for _, word := range item.words {
-				if word == "" {
-					continue
-				}
-
-				b.StartTimer()
-
-				result := m.Suggest(word, 10)
-
-				b.StopTimer()
-
-				if i == 0 {
-					total++
-
-					if result.ExactMatch && word == item.expected {
-						ok++
-						continue
-					}
-
-					if len(result.Suggestions) > 0 && result.Suggestions[0].Value == item.expected {
-						ok++
-						continue
-					}
-
-					// got := ""
-					// if len(result) > 0 {
-					// 	got = result[0]
-					// }
-
-					// b.Logf(
-					// 	"word %q: expected %q, got %s, all: %v\n",
-					// 	word, item.expected, got, result,
-					// )
-				}
-			}
-		}
-
-		b.ReportMetric(float64(ok), "success_words")
-		b.ReportMetric(float64(total), "total_words")
-		b.ReportMetric(float64(ok)/float64(total)*100, "success_percent")
-	}
-}
-
 func Test_NewSpellchecker(t *testing.T) {
 	t.Parallel()
 
-	s, err := New(DefaultAlphabet)
+	s, err := New(&tokenizerMock{}, EN)
 	require.NoError(t, err)
 	require.NotNil(t, s.dict)
 }
@@ -228,8 +18,106 @@ func Test_NewSpellchecker(t *testing.T) {
 func Test_Spellchecker_IsCorrect(t *testing.T) {
 	t.Parallel()
 
-	s := newSampleSpellchecker()
+	s := newSampleSpellchecker(t)
 
 	assert.True(t, s.IsCorrect("orange"))
 	assert.False(t, s.IsCorrect("car"))
+}
+
+func Test_Spellchecker_Add(t *testing.T) {
+	t.Parallel()
+
+	t.Run("adds each argument as a whole word", func(t *testing.T) {
+		t.Parallel()
+
+		s, err := New(NewWhitespaceTokenizer(), EN)
+		require.NoError(t, err)
+
+		s.Add("hello world", "foo")
+
+		require.True(t, s.IsCorrect("hello world"))
+		require.True(t, s.IsCorrect("foo"))
+		require.False(t, s.IsCorrect("hello"))
+	})
+
+	t.Run("skips empty strings", func(t *testing.T) {
+		t.Parallel()
+
+		s, err := New(NewWhitespaceTokenizer(), EN)
+		require.NoError(t, err)
+
+		s.Add("", "bar", "")
+
+		require.True(t, s.IsCorrect("bar"))
+		require.False(t, s.IsCorrect(""))
+	})
+}
+
+func Test_Spellchecker_AddWeight(t *testing.T) {
+	t.Parallel()
+
+	t.Run("increments count for an existing word", func(t *testing.T) {
+		t.Parallel()
+
+		s, err := New(NewWhitespaceTokenizer(), EN)
+		require.NoError(t, err)
+
+		s.AddWeight(2, "tea")
+		s.AddWeight(3, "tea")
+
+		id := s.dict.id("tea")
+		require.Equal(t, uint(5), s.dict.counts[id])
+	})
+
+	t.Run("adds remaining words if an earlier one already exists", func(t *testing.T) {
+		t.Parallel()
+
+		s, err := New(NewWhitespaceTokenizer(), EN)
+		require.NoError(t, err)
+
+		s.Add("tea")
+		s.AddWeight(1, "tea", "coffee")
+
+		require.True(t, s.IsCorrect("tea"))
+		require.True(t, s.IsCorrect("coffee"))
+		require.Equal(t, uint(2), s.dict.counts[s.dict.id("tea")])
+		require.Equal(t, uint(1), s.dict.counts[s.dict.id("coffee")])
+	})
+}
+
+func Test_Spellchecker_AddPhrases(t *testing.T) {
+	t.Parallel()
+
+	t.Run("tokenizes phrases before adding", func(t *testing.T) {
+		t.Parallel()
+
+		s, err := New(NewWhitespaceTokenizer(), EN)
+		require.NoError(t, err)
+
+		s.AddPhrases("green tea", "black coffee")
+
+		require.True(t, s.IsCorrect("green"))
+		require.True(t, s.IsCorrect("tea"))
+		require.True(t, s.IsCorrect("black"))
+		require.True(t, s.IsCorrect("coffee"))
+		require.False(t, s.IsCorrect("green tea"))
+	})
+
+	t.Run("applies weight to every token", func(t *testing.T) {
+		t.Parallel()
+
+		s, err := New(NewStandardTokenizer(), EN)
+		require.NoError(t, err)
+
+		s.AddPhraseWeight(4, "dog's bone")
+
+		require.Equal(t, uint(4), s.dict.counts[s.dict.id("dog's")])
+		require.Equal(t, uint(4), s.dict.counts[s.dict.id("bone")])
+	})
+}
+
+type tokenizerMock struct{}
+
+func (m *tokenizerMock) Tokenize(input string) []string {
+	return []string{input}
 }

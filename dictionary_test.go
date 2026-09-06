@@ -9,18 +9,21 @@ import (
 func Test_dictionary_id(t *testing.T) {
 	t.Parallel()
 
-	dict, err := newDictionary(DefaultAlphabet)
-	require.NoError(t, err)
-
 	t.Run("must return 0 for unexisting word", func(t *testing.T) {
 		t.Parallel()
+
+		dict, err := newDictionary(DefaultAlphabet)
+		require.NoError(t, err)
 
 		id := dict.id("word")
 		require.Equal(t, uint32(0), id)
 	})
 
-	t.Run("must return id for unexisting word", func(t *testing.T) {
+	t.Run("must return id for existing word", func(t *testing.T) {
 		t.Parallel()
+
+		dict, err := newDictionary(DefaultAlphabet)
+		require.NoError(t, err)
 
 		dict.ids["word"] = 1
 		id := dict.id("word")

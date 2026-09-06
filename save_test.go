@@ -11,7 +11,7 @@ import (
 func Test_Spellchecker_Save(t *testing.T) {
 	t.Parallel()
 
-	m1 := newSampleSpellchecker()
+	m1 := newSampleSpellchecker(t)
 
 	filePath := path.Join(t.TempDir(), "spellchecker.bin")
 	file, err := os.Create(filePath)
@@ -24,7 +24,7 @@ func Test_Spellchecker_Save(t *testing.T) {
 	file, err = os.Open(filePath)
 	require.NoError(t, err)
 
-	m2, err := Load(file)
+	m2, err := Load(file, NewWhitespaceTokenizer())
 	require.NoError(t, err)
 
 	require.EqualValues(t, m1.dict.id("green"), m2.dict.id("green"))
