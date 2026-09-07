@@ -19,6 +19,8 @@ type dictionary struct {
 	counts map[uint32]uint
 
 	index map[uint64][]uint32
+
+	pool *bitmapPool
 }
 
 func newDictionary(ab ...Alphabet) (*dictionary, error) {
@@ -34,6 +36,7 @@ func newDictionary(ab ...Alphabet) (*dictionary, error) {
 		words:    make(map[uint32][]rune),
 		counts:   make(map[uint32]uint),
 		index:    make(map[uint64][]uint32),
+		pool:     newBitmapPool(),
 	}, nil
 }
 
@@ -95,14 +98,14 @@ func (d *dictionary) find(word string, n int, maxErrors int, fn FilterFunc) []Ma
 		return result.DrainSorted()
 	}
 
-	bitmaps := bitmapsPool.Get().(map[uint64]struct{}) //nolint:forcetypeassert
+	bitmaps := d.pool.Get()
+	defer d.pool.Set(bitmaps)
+
 	d.computeCandidateBitmaps(bitmaps, bmSrc, maxErrors)
 
 	for bm := range bitmaps {
 		d.fillWithCandidates(result, wordRunes, bm, fn)
 	}
-
-	releaseBitmaps(bitmaps)
 
 	return result.DrainSorted()
 }
@@ -193,6 +196,7 @@ func (d *dictionary) UnmarshalBinary(data []byte) error {
 	d.counts = dictData.Counts
 	d.index = dictData.Index
 	d.words = dictData.Words
+	d.pool = newBitmapPool()
 
 	var max uint32
 	for _, id := range d.ids {
@@ -226,16 +230,28 @@ func sum(b bitmap.Bitmap32) uint64 {
 	return result
 }
 
-func releaseBitmaps(m map[uint64]struct{}) {
-	for k := range m {
-		delete(m, k)
-	}
-
-	bitmapsPool.Put(m)
+type bitmapPool struct {
+	inner *sync.Pool
 }
 
-var bitmapsPool = sync.Pool{
-	New: func() any {
-		return make(map[uint64]struct{}, 256)
-	},
+func newBitmapPool() *bitmapPool {
+	return &bitmapPool{
+		inner: &sync.Pool{
+			New: func() any {
+				return make(map[uint64]struct{}, 256)
+			},
+		},
+	}
+}
+
+func (p *bitmapPool) Get() map[uint64]struct{} {
+	return p.inner.Get().(map[uint64]struct{}) //nolint:forcetypeassert
+}
+
+func (p *bitmapPool) Set(value map[uint64]struct{}) {
+	for k := range value {
+		delete(value, k)
+	}
+
+	p.inner.Put(value)
 }
