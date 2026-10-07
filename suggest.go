@@ -2,8 +2,6 @@ package spellchecker
 
 import (
 	"math"
-
-	"github.com/agext/levenshtein"
 )
 
 const DefaultMaxErrors = 2
@@ -83,7 +81,7 @@ var defaultFilterFunc FilterFunc = func(src, candidate []rune, count uint, maxEr
 		return 0, false
 	}
 
-	distance, prefixLen, suffixLen := levenshtein.Calculate(src, candidate, 0, 1, 1, 1)
+	distance, prefixLen, suffixLen := levenshtein(src, candidate, maxErrors)
 	if distance > maxErrors {
 		return 0, false
 	}
