@@ -11,7 +11,7 @@ const DefaultMaxErrors = 2
 // FilterFunc compares the source word with a candidate word.
 // It returns the candidate's score and a boolean flag.
 // If the flag is false, the candidate will be completely filtered out.
-type FilterFunc func(src, candidate []rune, count uint) (float64, bool)
+type FilterFunc func(src, candidate []rune, count uint, maxErrors int) (float64, bool)
 
 type OptionFunc func(opts *searchOptions)
 
@@ -57,13 +57,13 @@ func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) Suggestio
 		return SuggestionResult{ExactMatch: true}
 	}
 
-	searchOpts := searchOptions{maxErrors: DefaultMaxErrors}
+	searchOpts := searchOptions{maxErrors: DefaultMaxErrors, filterFunc: defaultFilterFunc}
 	for _, o := range opts {
 		o(&searchOpts)
 	}
 
 	if searchOpts.filterFunc == nil {
-		searchOpts.filterFunc = defaultFilterFunc(searchOpts.maxErrors)
+		searchOpts.filterFunc = defaultFilterFunc
 	}
 
 	return SuggestionResult{
@@ -76,17 +76,15 @@ type searchOptions struct {
 	filterFunc FilterFunc
 }
 
-func defaultFilterFunc(maxErrors int) FilterFunc {
+var defaultFilterFunc FilterFunc = func(src, candidate []rune, count uint, maxErrors int) (float64, bool) {
 	const prefixCoefficitent = 1.5
 
-	return func(src, candidate []rune, count uint) (float64, bool) {
-		distance, prefixLen, suffixLen := levenshtein.Calculate(src, candidate, 0, 1, 1, 1)
-		if distance > maxErrors {
-			return 0, false
-		}
-
-		mult := math.Log1p(float64(count)) * math.Pow(prefixCoefficitent, float64(prefixLen+suffixLen))
-
-		return 1 / (1 + float64(distance*distance)) * mult, true
+	distance, prefixLen, suffixLen := levenshtein.Calculate(src, candidate, 0, 1, 1, 1)
+	if distance > maxErrors {
+		return 0, false
 	}
+
+	mult := math.Log1p(float64(count)) * math.Pow(prefixCoefficitent, float64(prefixLen+suffixLen))
+
+	return 1 / (1 + float64(distance*distance)) * mult, true
 }

@@ -87,7 +87,7 @@ func (d *dictionary) find(word string, n int, maxErrors int, fn FilterFunc) []Ma
 
 	// check for transposition or exact match and do early termination if found
 	// (the most common mistake is a transposition of letters)
-	d.fillWithCandidates(result, wordRunes, sum(bmSrc), fn)
+	d.fillWithCandidates(result, wordRunes, sum(bmSrc), maxErrors, fn)
 
 	if result.Len() != 0 {
 		return result.DrainSorted()
@@ -99,7 +99,7 @@ func (d *dictionary) find(word string, n int, maxErrors int, fn FilterFunc) []Ma
 	d.computeCandidateBitmaps(bitmaps, bmSrc, maxErrors)
 
 	for bm := range bitmaps {
-		d.fillWithCandidates(result, wordRunes, bm, fn)
+		d.fillWithCandidates(result, wordRunes, bm, maxErrors, fn)
 	}
 
 	return result.DrainSorted()
@@ -128,7 +128,7 @@ func (d *dictionary) computeCandidateBitmaps(bitmaps map[uint64]struct{}, src bi
 	dfs(src.Clone(), 0, 0)
 }
 
-func (d *dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune, bm uint64, filter FilterFunc) {
+func (d *dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune, bm uint64, maxErrors int, filter FilterFunc) {
 	ids := d.index[bm]
 	for _, id := range ids {
 		docWord, ok := d.words[id]
@@ -136,7 +136,7 @@ func (d *dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune,
 			continue
 		}
 
-		score, ok := filter(wordRunes, docWord, d.counts[id])
+		score, ok := filter(wordRunes, docWord, d.counts[id], maxErrors)
 		if !ok {
 			continue
 		}
