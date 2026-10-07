@@ -141,10 +141,7 @@ func (d *dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune,
 			continue
 		}
 
-		result.Push(Match{
-			Value: string(docWord),
-			Score: score,
-		})
+		result.Offer(score, docWord)
 	}
 }
 

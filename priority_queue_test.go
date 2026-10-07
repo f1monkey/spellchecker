@@ -98,4 +98,27 @@ func Test_priorityQueue(t *testing.T) {
 			}, pq.items)
 		})
 	})
+
+	t.Run("offer must keep top elements and drain them sorted", func(t *testing.T) {
+		t.Parallel()
+
+		pq := newPriorityQueue(2)
+		pq.Offer(5, []rune("foo"))
+		pq.Offer(1, []rune("bar"))
+		pq.Offer(10, []rune("baz"))
+
+		require.Equal(t, []Match{
+			{Value: "baz", Score: 10},
+			{Value: "foo", Score: 5},
+		}, pq.DrainSorted())
+	})
+
+	t.Run("offer must ignore elements if capacity is zero", func(t *testing.T) {
+		t.Parallel()
+
+		pq := newPriorityQueue(0)
+		pq.Offer(5, []rune("foo"))
+
+		require.Empty(t, pq.DrainSorted())
+	})
 }
