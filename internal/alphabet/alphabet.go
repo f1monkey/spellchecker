@@ -1,25 +1,23 @@
-package spellchecker
+package alphabet
 
 import (
 	"fmt"
 	"slices"
 )
 
-type Alphabet = string
+type Letters = string
 
 const (
-	EN      Alphabet = "abcdefghijklmnopqrstuvwxyz"
-	RU      Alphabet = "абвгдеёжзийклмнопрстуфхцчшщъыьэюя"
-	Numbers Alphabet = "1234567890"
+	EN      Letters = "abcdefghijklmnopqrstuvwxyz"
+	RU      Letters = "абвгдеёжзийклмнопрстуфхцчшщъыьэюя"
+	Numbers Letters = "1234567890"
 )
 
-const DefaultAlphabet = EN
+type Alphabet map[rune]uint32
 
-type alphabet map[rune]uint32
-
-// newAlphabet create a new alphabet instance
-func newAlphabet(strings ...Alphabet) (alphabet, error) {
-	result := make(alphabet)
+// New create a new alphabet instance
+func New(strings ...Letters) (Alphabet, error) {
+	result := make(Alphabet)
 
 	var runes []rune
 
@@ -42,9 +40,9 @@ func newAlphabet(strings ...Alphabet) (alphabet, error) {
 	return result, nil
 }
 
-// zobrist returns a pseudo-random 64-bit value for every alphabet symbol.
+// Zobrist returns a pseudo-random 64-bit value for every alphabet symbol.
 // The values depend only on the symbol position, so they are stable across runs.
-func (a alphabet) zobrist() []uint64 {
+func (a Alphabet) Zobrist() []uint64 {
 	result := make([]uint64, len(a))
 	for i := range result {
 		result[i] = splitmix64(uint64(i))
@@ -53,9 +51,9 @@ func (a alphabet) zobrist() []uint64 {
 	return result
 }
 
-// key returns the Zobrist hash of the set of alphabet symbols used in the word.
-// Repeated symbols and symbols outside the alphabet do not affect the key.
-func (a alphabet) key(word []rune, zobrist []uint64) uint64 {
+// Key returns the Zobrist hash of the set of alphabet symbols used in the word.
+// Repeated symbols and symbols outside the alphabet do not affect the Key.
+func (a Alphabet) Key(word []rune, zobrist []uint64) uint64 {
 	var result uint64
 
 	for i, letter := range word {

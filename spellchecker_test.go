@@ -1,8 +1,11 @@
 package spellchecker
 
 import (
+	"os"
+	"path"
 	"testing"
 
+	"github.com/f1monkey/spellchecker/v3/internal/alphabet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -10,7 +13,7 @@ import (
 func Test_NewSpellchecker(t *testing.T) {
 	t.Parallel()
 
-	s, err := New(&tokenizerMock{}, EN)
+	s, err := New(&tokenizerMock{}, alphabet.EN)
 	require.NoError(t, err)
 	require.NotNil(t, s.dict)
 }
@@ -62,11 +65,13 @@ func Test_Spellchecker_AddWeight(t *testing.T) {
 		s, err := New(NewWhitespaceTokenizer(), EN)
 		require.NoError(t, err)
 
-		s.AddWeight(2, "tea")
-		s.AddWeight(3, "tea")
+		// "ban" and "bin" are the same edit away from "ben", so the higher weight must rank first.
+		s.AddWeight(2, "ban")
+		s.AddWeight(3, "ban")
+		s.AddWeight(1, "bin")
 
-		id := s.dict.id("tea")
-		require.Equal(t, uint(5), s.dict.counts[id])
+		result := s.Suggest("ben", 2)
+		require.Equal(t, []string{"ban", "bin"}, suggestionValues(result))
 	})
 
 	t.Run("adds remaining words if an earlier one already exists", func(t *testing.T) {
@@ -75,14 +80,24 @@ func Test_Spellchecker_AddWeight(t *testing.T) {
 		s, err := New(NewWhitespaceTokenizer(), EN)
 		require.NoError(t, err)
 
-		s.Add("tea")
-		s.AddWeight(1, "tea", "coffee")
+		s.Add("ban")
+		s.AddWeight(1, "ban", "bin")
 
-		require.True(t, s.IsCorrect("tea"))
-		require.True(t, s.IsCorrect("coffee"))
-		require.Equal(t, uint(2), s.dict.counts[s.dict.id("tea")])
-		require.Equal(t, uint(1), s.dict.counts[s.dict.id("coffee")])
+		require.True(t, s.IsCorrect("ban"))
+		require.True(t, s.IsCorrect("bin"))
+
+		result := s.Suggest("ben", 2)
+		require.Equal(t, []string{"ban", "bin"}, suggestionValues(result))
 	})
+}
+
+func suggestionValues(result SuggestionResult) []string {
+	values := make([]string, len(result.Suggestions))
+	for i, match := range result.Suggestions {
+		values[i] = match.Value
+	}
+
+	return values
 }
 
 func Test_Spellchecker_AddPhrases(t *testing.T) {
@@ -110,10 +125,45 @@ func Test_Spellchecker_AddPhrases(t *testing.T) {
 		require.NoError(t, err)
 
 		s.AddPhraseWeight(4, "dog's bone")
+		s.AddWeight(1, "dig's")
 
-		require.Equal(t, uint(4), s.dict.counts[s.dict.id("dog's")])
-		require.Equal(t, uint(4), s.dict.counts[s.dict.id("bone")])
+		require.True(t, s.IsCorrect("dog's"))
+		require.True(t, s.IsCorrect("bone"))
+
+		// "dog's" was added with a higher weight than "dig's", and both are one edit from "dug's".
+		result := s.Suggest("dug's", 2)
+		require.Equal(t, []string{"dog's", "dig's"}, suggestionValues(result))
 	})
+}
+
+func Test_Spellchecker_Save(t *testing.T) {
+	t.Parallel()
+
+	m1 := newSampleSpellchecker(t)
+
+	filePath := path.Join(t.TempDir(), "spellchecker.bin")
+	file, err := os.Create(filePath)
+	require.NoError(t, err)
+	err = m1.Save(file)
+	require.NoError(t, err)
+	err = file.Close()
+	require.NoError(t, err)
+
+	file, err = os.Open(filePath)
+	require.NoError(t, err)
+
+	m2, err := Load(file, NewWhitespaceTokenizer())
+	require.NoError(t, err)
+
+	require.Equal(t, m1.dict.ID("green"), m2.dict.ID("green"))
+
+	// A word added after loading must get the same id, so the id sequence survived the round trip.
+	m1.Add("brandnew")
+	m2.Add("brandnew")
+	require.Equal(t, m1.dict.ID("brandnew"), m2.dict.ID("brandnew"))
+	require.NotEqual(t, m2.dict.ID("green"), m2.dict.ID("brandnew"))
+
+	require.Equal(t, m1.Suggest("arang", 5), m2.Suggest("arang", 5))
 }
 
 type tokenizerMock struct{}
