@@ -37,6 +37,11 @@ func WithFilterFunc(f FilterFunc) OptionFunc {
 	}
 }
 
+type Match struct {
+	Value string
+	Score float64
+}
+
 type SuggestionResult struct {
 	ExactMatch  bool // if true, the word is correct
 	Suggestions []Match
@@ -52,9 +57,13 @@ func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) Suggestio
 		return SuggestionResult{ExactMatch: true}
 	}
 
-	searchOpts := defaultSearchOptions
+	searchOpts := searchOptions{maxErrors: DefaultMaxErrors}
 	for _, o := range opts {
 		o(&searchOpts)
+	}
+
+	if searchOpts.filterFunc == nil {
+		searchOpts.filterFunc = defaultFilterFunc(searchOpts.maxErrors)
 	}
 
 	return SuggestionResult{
@@ -65,11 +74,6 @@ func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) Suggestio
 type searchOptions struct {
 	maxErrors  int
 	filterFunc FilterFunc
-}
-
-var defaultSearchOptions = searchOptions{
-	maxErrors:  DefaultMaxErrors,
-	filterFunc: defaultFilterFunc(DefaultMaxErrors),
 }
 
 func defaultFilterFunc(maxErrors int) FilterFunc {

@@ -26,10 +26,10 @@ func Test_Spellchecker_SuggestScore(t *testing.T) {
 		t.Parallel()
 
 		s := newSampleSpellchecker(t)
-		result := s.Suggest("arang", 5, WithMaxErrors(1))
+		result := s.Suggest("rang", 5, WithMaxErrors(1))
 		require.Equal(t, SuggestionResult{
 			Suggestions: []Match{
-				{Value: "range", Score: 0.13862943611198905},
+				{Value: "range", Score: 1.7545288007923614},
 			},
 		}, result)
 

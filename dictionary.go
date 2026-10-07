@@ -75,11 +75,6 @@ func (d *dictionary) inc(id uint32, n uint) {
 	d.counts[id] += n
 }
 
-type Match struct {
-	Value string
-	Score float64
-}
-
 func (d *dictionary) find(word string, n int, maxErrors int, fn FilterFunc) []Match {
 	if maxErrors <= 0 {
 		return nil
