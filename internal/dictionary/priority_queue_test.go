@@ -1,4 +1,4 @@
-package spellchecker
+package dictionary
 
 import (
 	"testing"
@@ -69,6 +69,22 @@ func Test_priorityQueue(t *testing.T) {
 
 		require.Equal(t, []Match{
 			{Value: "bar", Score: 5},
+		}, pq.DrainSorted())
+	})
+
+	t.Run("must sink through the smaller right child", func(t *testing.T) {
+		t.Parallel()
+
+		pq := newPriorityQueue(3)
+		pq.Offer(1, []rune("a"))
+		pq.Offer(5, []rune("b"))
+		pq.Offer(2, []rune("c"))
+		pq.Offer(9, []rune("d"))
+
+		require.Equal(t, []Match{
+			{Value: "d", Score: 9},
+			{Value: "b", Score: 5},
+			{Value: "c", Score: 2},
 		}, pq.DrainSorted())
 	})
 

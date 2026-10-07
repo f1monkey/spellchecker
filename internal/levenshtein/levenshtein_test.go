@@ -1,4 +1,4 @@
-package spellchecker
+package levenshtein
 
 import (
 	"math/rand/v2"
@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_levenshtein(t *testing.T) {
+func Test_Levenshtein(t *testing.T) {
 	t.Parallel()
 
 	t.Run("must calculate known distances", func(t *testing.T) {
@@ -35,7 +35,7 @@ func Test_levenshtein(t *testing.T) {
 		}
 
 		for _, c := range cases {
-			dist, pre, suf := levenshtein([]rune(c.a), []rune(c.b), c.maxDist)
+			dist, pre, suf := Levenshtein([]rune(c.a), []rune(c.b), c.maxDist)
 			require.Equal(t, c.dist, dist, "%q → %q, max %d", c.a, c.b, c.maxDist)
 			require.Equal(t, c.pre, pre, "prefix %q → %q", c.a, c.b)
 			require.Equal(t, c.suf, suf, "suffix %q → %q", c.a, c.b)
@@ -63,7 +63,7 @@ func Test_levenshtein(t *testing.T) {
 			maxDist := rnd.IntN(5)
 
 			expected := min(referenceLevenshtein(a, b), maxDist+1)
-			dist, _, _ := levenshtein(a, b, maxDist)
+			dist, _, _ := Levenshtein(a, b, maxDist)
 			require.Equal(t, expected, dist, "%q → %q, max %d", string(a), string(b), maxDist)
 		}
 	})
@@ -74,7 +74,7 @@ func Test_levenshtein_NoAllocs(t *testing.T) {
 	a, b := []rune("problam"), []rune("problems")
 
 	allocs := testing.AllocsPerRun(100, func() {
-		levenshtein(a, b, 2)
+		Levenshtein(a, b, 2)
 	})
 	require.Zero(t, allocs)
 }
@@ -140,6 +140,6 @@ func Benchmark_levenshtein(b *testing.B) {
 	src, candidate := []rune("problam"), []rune("problems")
 
 	for b.Loop() {
-		levenshtein(src, candidate, 2)
+		Levenshtein(src, candidate, 2)
 	}
 }

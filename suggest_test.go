@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_Spellchecker_SuggestScore(t *testing.T) {
+func Test_Spellchecker_Suggest(t *testing.T) {
 	t.Parallel()
 
 	t.Run("fix", func(t *testing.T) {

@@ -1,14 +1,35 @@
 package spellchecker
 
 import (
+	"encoding/gob"
+	"io"
 	"sync"
+
+	"github.com/f1monkey/spellchecker/v3/internal/alphabet"
+	"github.com/f1monkey/spellchecker/v3/internal/dictionary"
+)
+
+type dict interface {
+	ID(word string) uint32
+	Has(word string) bool
+	Inc(id uint32, n uint)
+	Add(word string, n uint) uint32
+	Find(word string, n int, maxErrors int, fn FilterFunc) []dictionary.Match
+}
+
+type Alphabet = alphabet.Letters
+
+const (
+	EN      Alphabet = alphabet.EN
+	RU      Alphabet = alphabet.RU
+	Numbers Alphabet = alphabet.Numbers
 )
 
 type Spellchecker struct {
 	mtx sync.RWMutex
 
 	tokenizer Tokenizer
-	dict      *dictionary
+	dict      dict
 }
 
 // New creates a spellchecker with the given tokenizer and alphabets.
@@ -16,7 +37,7 @@ type Spellchecker struct {
 // characters are ignored. Pass one or more constants such as EN, RU, Numbers,
 // or any custom string.
 func New(tokenizer Tokenizer, alphabets ...Alphabet) (*Spellchecker, error) {
-	dict, err := newDictionary(alphabets...)
+	dict, err := dictionary.New(alphabets...)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +55,7 @@ func (s *Spellchecker) IsCorrect(word string) bool {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 
-	return s.dict.has(word)
+	return s.dict.Has(word)
 }
 
 // Add adds each argument as a whole dictionary word. Strings are not split;
@@ -55,13 +76,13 @@ func (s *Spellchecker) AddWeight(weight uint, words ...string) {
 			continue
 		}
 
-		if id := s.dict.id(word); id > 0 {
-			s.dict.inc(id, weight)
+		if id := s.dict.ID(word); id > 0 {
+			s.dict.Inc(id, weight)
 
 			continue
 		}
 
-		s.dict.add(word, weight)
+		s.dict.Add(word, weight)
 	}
 }
 
@@ -79,4 +100,37 @@ func (s *Spellchecker) AddPhraseWeight(weight uint, phrases ...string) {
 			s.AddWeight(weight, word)
 		}
 	}
+}
+
+type spellcheckerData struct {
+	Dict *dictionary.Dictionary
+}
+
+// Save encodes spellchecker data and writes it to the provided writer
+func (m *Spellchecker) Save(w io.Writer) error {
+	m.mtx.RLock()
+	defer m.mtx.RUnlock()
+
+	//nolint:forcetypeassert
+	data := spellcheckerData{
+		Dict: m.dict.(*dictionary.Dictionary),
+	}
+
+	return gob.NewEncoder(w).Encode(data)
+}
+
+// Load reads spellchecker data from the provided reader and decodes it.
+// tokenizer is used for AddPhrases after loading.
+func Load(reader io.Reader, tokenizer Tokenizer) (*Spellchecker, error) {
+	data := spellcheckerData{}
+
+	err := gob.NewDecoder(reader).Decode(&data)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Spellchecker{
+		tokenizer: tokenizer,
+		dict:      data.Dict,
+	}, nil
 }

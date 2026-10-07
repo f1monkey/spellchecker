@@ -1,4 +1,4 @@
-package spellchecker
+package dictionary
 
 import (
 	"bytes"
@@ -6,10 +6,19 @@ import (
 	"encoding/gob"
 	"sync"
 	"sync/atomic"
+
+	"github.com/f1monkey/spellchecker/v3/internal/alphabet"
 )
 
-type dictionary struct {
-	alphabet alphabet
+type FilterFunc func(src, candidate []rune, count uint, maxErrors int) (float64, bool)
+
+type Match struct {
+	Value string
+	Score float64
+}
+
+type Dictionary struct {
+	alphabet alphabet.Alphabet
 	zobrist  []uint64
 	nextID   func() uint32
 
@@ -22,15 +31,15 @@ type dictionary struct {
 	pool *keyPool
 }
 
-func newDictionary(ab ...Alphabet) (*dictionary, error) {
-	alphabet, err := newAlphabet(ab...)
+func New(ab ...alphabet.Letters) (*Dictionary, error) {
+	alphabet, err := alphabet.New(ab...)
 	if err != nil {
 		return nil, err
 	}
 
-	return &dictionary{
+	return &Dictionary{
 		alphabet: alphabet,
-		zobrist:  alphabet.zobrist(),
+		zobrist:  alphabet.Zobrist(),
 		nextID:   idSeq(0),
 		ids:      make(map[string]uint32),
 		words:    make(map[uint32][]rune),
@@ -40,18 +49,18 @@ func newDictionary(ab ...Alphabet) (*dictionary, error) {
 	}, nil
 }
 
-// id get ID of the word. Returns 0 if not found
-func (d *dictionary) id(word string) uint32 {
+// ID get ID of the word. Returns 0 if not found
+func (d *Dictionary) ID(word string) uint32 {
 	return d.ids[word]
 }
 
-// has check if the word is present in the dictionary
-func (d *dictionary) has(word string) bool {
+// Has check if the word is present in the dictionary
+func (d *Dictionary) Has(word string) bool {
 	return d.ids[word] > 0
 }
 
-// add puts the word to the dictionary
-func (d *dictionary) add(word string, n uint) uint32 {
+// Add puts the word to the dictionary
+func (d *Dictionary) Add(word string, n uint) uint32 {
 	id := d.nextID()
 	d.ids[word] = id
 
@@ -64,13 +73,8 @@ func (d *dictionary) add(word string, n uint) uint32 {
 	return id
 }
 
-func (d *dictionary) addToIndex(id uint32, word []rune) {
-	key := d.alphabet.key(word, d.zobrist)
-	d.index[key] = append(d.index[key], id)
-}
-
 // inc increase word occurrence counter
-func (d *dictionary) inc(id uint32, n uint) {
+func (d *Dictionary) Inc(id uint32, n uint) {
 	_, ok := d.counts[id]
 	if !ok {
 		return
@@ -79,7 +83,7 @@ func (d *dictionary) inc(id uint32, n uint) {
 	d.counts[id] += n
 }
 
-func (d *dictionary) find(word string, n int, maxErrors int, fn FilterFunc) []Match {
+func (d *Dictionary) Find(word string, n int, maxErrors int, fn FilterFunc) []Match {
 	if maxErrors <= 0 {
 		return nil
 	}
@@ -87,7 +91,7 @@ func (d *dictionary) find(word string, n int, maxErrors int, fn FilterFunc) []Ma
 	result := newPriorityQueue(n)
 
 	wordRunes := []rune(word)
-	srcKey := d.alphabet.key(wordRunes, d.zobrist)
+	srcKey := d.alphabet.Key(wordRunes, d.zobrist)
 
 	// check for transposition or exact match and do early termination if found
 	// (the most common mistake is a transposition of letters)
@@ -109,9 +113,14 @@ func (d *dictionary) find(word string, n int, maxErrors int, fn FilterFunc) []Ma
 	return result.DrainSorted()
 }
 
+func (d *Dictionary) addToIndex(id uint32, word []rune) {
+	key := d.alphabet.Key(word, d.zobrist)
+	d.index[key] = append(d.index[key], id)
+}
+
 // computeCandidateKeys collects index keys of letter sets that differ from src
 // by at most maxFlips symbols. Flipping a symbol is a XOR with its Zobrist value.
-func (d *dictionary) computeCandidateKeys(keys map[uint64]struct{}, src uint64, maxFlips int) {
+func (d *Dictionary) computeCandidateKeys(keys map[uint64]struct{}, src uint64, maxFlips int) {
 	var dfs func(key uint64, level, start int)
 
 	dfs = func(key uint64, level, start int) {
@@ -131,7 +140,7 @@ func (d *dictionary) computeCandidateKeys(keys map[uint64]struct{}, src uint64, 
 	dfs(src, 0, 0)
 }
 
-func (d *dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune, key uint64, maxErrors int, filter FilterFunc) {
+func (d *Dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune, key uint64, maxErrors int, filter FilterFunc) {
 	ids := d.index[key]
 	for _, id := range ids {
 		docWord, ok := d.words[id]
@@ -148,19 +157,19 @@ func (d *dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune,
 	}
 }
 
-var _ encoding.BinaryMarshaler = (*dictionary)(nil)
-var _ encoding.BinaryUnmarshaler = (*dictionary)(nil)
+var _ encoding.BinaryMarshaler = (*Dictionary)(nil)
+var _ encoding.BinaryUnmarshaler = (*Dictionary)(nil)
 
 // dictData is the serialized form of the dictionary.
 // The index is not stored: it is rebuilt from Words on load.
 type dictData struct {
-	Alphabet alphabet
+	Alphabet alphabet.Alphabet
 	IDs      map[string]uint32
 	Words    map[uint32][]rune
 	Counts   map[uint32]uint
 }
 
-func (d *dictionary) MarshalBinary() ([]byte, error) {
+func (d *Dictionary) MarshalBinary() ([]byte, error) {
 	data := &dictData{
 		Alphabet: d.alphabet,
 		IDs:      d.ids,
@@ -177,7 +186,7 @@ func (d *dictionary) MarshalBinary() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (d *dictionary) UnmarshalBinary(data []byte) error {
+func (d *Dictionary) UnmarshalBinary(data []byte) error {
 	dictData := &dictData{}
 
 	err := gob.NewDecoder(bytes.NewBuffer(data)).Decode(dictData)
@@ -186,7 +195,7 @@ func (d *dictionary) UnmarshalBinary(data []byte) error {
 	}
 
 	d.alphabet = dictData.Alphabet
-	d.zobrist = d.alphabet.zobrist()
+	d.zobrist = d.alphabet.Zobrist()
 	d.ids = dictData.IDs
 	d.counts = dictData.Counts
 	d.words = dictData.Words

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/f1monkey/spellchecker/v3/internal/alphabet"
 	"github.com/stretchr/testify/require"
 )
 
@@ -178,7 +179,7 @@ func loadFullSpellchecker(tb testing.TB) *Spellchecker {
 func newFullSpellchecker(tb testing.TB) *Spellchecker {
 	tb.Helper()
 
-	s, err := New(NewWhitespaceTokenizer(), DefaultAlphabet)
+	s, err := New(NewWhitespaceTokenizer(), alphabet.EN)
 	require.NoError(tb, err)
 
 	s.AddPhrases(strings.ToLower(string(mustReadFile(tb, "data/big.txt"))))
@@ -189,7 +190,7 @@ func newFullSpellchecker(tb testing.TB) *Spellchecker {
 func newSampleSpellchecker(tb testing.TB) *Spellchecker {
 	tb.Helper()
 
-	s, err := New(NewWhitespaceTokenizer(), DefaultAlphabet)
+	s, err := New(NewWhitespaceTokenizer(), alphabet.EN)
 	require.NoError(tb, err)
 
 	s.AddPhrases(strings.ToLower(string(mustReadFile(tb, "data/sample.txt"))))

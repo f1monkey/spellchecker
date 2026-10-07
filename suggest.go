@@ -2,6 +2,9 @@ package spellchecker
 
 import (
 	"math"
+
+	"github.com/f1monkey/spellchecker/v3/internal/dictionary"
+	"github.com/f1monkey/spellchecker/v3/internal/levenshtein"
 )
 
 const DefaultMaxErrors = 2
@@ -9,7 +12,7 @@ const DefaultMaxErrors = 2
 // FilterFunc compares the source word with a candidate word.
 // It returns the candidate's score and a boolean flag.
 // If the flag is false, the candidate will be completely filtered out.
-type FilterFunc func(src, candidate []rune, count uint, maxErrors int) (float64, bool)
+type FilterFunc = dictionary.FilterFunc
 
 type OptionFunc func(opts *searchOptions)
 
@@ -35,10 +38,7 @@ func WithFilterFunc(f FilterFunc) OptionFunc {
 	}
 }
 
-type Match struct {
-	Value string
-	Score float64
-}
+type Match = dictionary.Match
 
 type SuggestionResult struct {
 	ExactMatch  bool // if true, the word is correct
@@ -51,7 +51,7 @@ func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) Suggestio
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 
-	if s.dict.has(word) {
+	if s.dict.Has(word) {
 		return SuggestionResult{ExactMatch: true}
 	}
 
@@ -65,7 +65,7 @@ func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) Suggestio
 	}
 
 	return SuggestionResult{
-		Suggestions: s.dict.find(word, n, searchOpts.maxErrors, searchOpts.filterFunc),
+		Suggestions: s.dict.Find(word, n, searchOpts.maxErrors, searchOpts.filterFunc),
 	}
 }
 
@@ -81,7 +81,7 @@ var defaultFilterFunc FilterFunc = func(src, candidate []rune, count uint, maxEr
 		return 0, false
 	}
 
-	distance, prefixLen, suffixLen := levenshtein(src, candidate, maxErrors)
+	distance, prefixLen, suffixLen := levenshtein.Levenshtein(src, candidate, maxErrors)
 	if distance > maxErrors {
 		return 0, false
 	}

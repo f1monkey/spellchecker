@@ -1,4 +1,4 @@
-package spellchecker
+package dictionary
 
 // priorityQueue keeps the top capacity matches by score.
 // items is a binary min-heap: items[0] has the lowest score.
