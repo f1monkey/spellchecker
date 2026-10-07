@@ -2,8 +2,6 @@ package spellchecker
 
 import (
 	"math"
-
-	"github.com/agext/levenshtein"
 )
 
 const DefaultMaxErrors = 2
@@ -11,11 +9,11 @@ const DefaultMaxErrors = 2
 // FilterFunc compares the source word with a candidate word.
 // It returns the candidate's score and a boolean flag.
 // If the flag is false, the candidate will be completely filtered out.
-type FilterFunc func(src, candidate []rune, count uint) (float64, bool)
+type FilterFunc func(src, candidate []rune, count uint, maxErrors int) (float64, bool)
 
-type SearchOptionFunc func(opts *searchOptions)
+type OptionFunc func(opts *searchOptions)
 
-// SuggestWithMaxErrors sets the maximum allowed difference in bits
+// WithMaxErrors sets the maximum allowed difference in bits
 // between the "search word" and a "dictionary word".
 // - deletion is a 1-bit change (proble → problem)
 // - insertion is a 1-bit change (problemm → problem)
@@ -24,17 +22,22 @@ type SearchOptionFunc func(opts *searchOptions)
 //
 // It is not recommended to set this value greater than 2,
 // as it can significantly affect performance.
-func SuggestWithMaxErrors(maxErrors int) SearchOptionFunc {
+func WithMaxErrors(maxErrors int) OptionFunc {
 	return func(opts *searchOptions) {
 		opts.maxErrors = maxErrors
 	}
 }
 
-// SuggestWithFilterFunc set a FilterFunc
-func SuggestWithFilterFunc(f FilterFunc) SearchOptionFunc {
+// WithFilterFunc set a FilterFunc
+func WithFilterFunc(f FilterFunc) OptionFunc {
 	return func(opts *searchOptions) {
 		opts.filterFunc = f
 	}
+}
+
+type Match struct {
+	Value string
+	Score float64
 }
 
 type SuggestionResult struct {
@@ -44,7 +47,7 @@ type SuggestionResult struct {
 
 // Suggest find top n suggestions for the word.
 // Returns spellchecker scores along with words
-func (s *Spellchecker) Suggest(word string, n int, opts ...SearchOptionFunc) SuggestionResult {
+func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) SuggestionResult {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 
@@ -52,9 +55,13 @@ func (s *Spellchecker) Suggest(word string, n int, opts ...SearchOptionFunc) Sug
 		return SuggestionResult{ExactMatch: true}
 	}
 
-	searchOpts := defaultSearchOptions
+	searchOpts := searchOptions{maxErrors: DefaultMaxErrors, filterFunc: defaultFilterFunc}
 	for _, o := range opts {
 		o(&searchOpts)
+	}
+
+	if searchOpts.filterFunc == nil {
+		searchOpts.filterFunc = defaultFilterFunc
 	}
 
 	return SuggestionResult{
@@ -67,20 +74,19 @@ type searchOptions struct {
 	filterFunc FilterFunc
 }
 
-var defaultSearchOptions = searchOptions{
-	maxErrors:  DefaultMaxErrors,
-	filterFunc: defaultFilterFunc(DefaultMaxErrors),
-}
+var defaultFilterFunc FilterFunc = func(src, candidate []rune, count uint, maxErrors int) (float64, bool) {
+	const prefixCoefficitent = 1.5
 
-func defaultFilterFunc(maxErrors int) FilterFunc {
-	return func(src, candidate []rune, count uint) (float64, bool) {
-		distance, prefixLen, suffixLen := levenshtein.Calculate(src, candidate, 0, 1, 1, 1)
-		if distance > maxErrors {
-			return 0, false
-		}
-
-		mult := math.Log1p(float64(count)) * math.Pow(1.5, float64(prefixLen+suffixLen))
-
-		return 1 / (1 + float64(distance*distance)) * mult, true
+	if math.Abs(float64(len(src)-len(candidate))) > float64(maxErrors) {
+		return 0, false
 	}
+
+	distance, prefixLen, suffixLen := levenshtein(src, candidate, maxErrors)
+	if distance > maxErrors {
+		return 0, false
+	}
+
+	mult := math.Log1p(float64(count)) * math.Pow(prefixCoefficitent, float64(prefixLen+suffixLen))
+
+	return 1 / (1 + float64(distance*distance)) * mult, true
 }

@@ -7,8 +7,12 @@ import (
 )
 
 func Test_Spellchecker_SuggestScore(t *testing.T) {
+	t.Parallel()
+
 	t.Run("fix", func(t *testing.T) {
-		s := newSampleSpellchecker()
+		t.Parallel()
+
+		s := newSampleSpellchecker(t)
 		result := s.Suggest("arang", 5)
 		require.Equal(t, SuggestionResult{
 			Suggestions: []Match{
@@ -19,15 +23,17 @@ func Test_Spellchecker_SuggestScore(t *testing.T) {
 	})
 
 	t.Run("custom max errors", func(t *testing.T) {
-		s := newSampleSpellchecker()
-		result := s.Suggest("arang", 5, SuggestWithMaxErrors(1))
+		t.Parallel()
+
+		s := newSampleSpellchecker(t)
+		result := s.Suggest("rang", 5, WithMaxErrors(1))
 		require.Equal(t, SuggestionResult{
 			Suggestions: []Match{
-				{Value: "range", Score: 0.13862943611198905},
+				{Value: "range", Score: 1.7545288007923614},
 			},
 		}, result)
 
-		result = s.Suggest("arang", 5, SuggestWithMaxErrors(2))
+		result = s.Suggest("arang", 5, WithMaxErrors(2))
 		require.Equal(t, SuggestionResult{
 			Suggestions: []Match{
 				{Value: "orange", Score: 0.2772588722239781},
@@ -37,13 +43,17 @@ func Test_Spellchecker_SuggestScore(t *testing.T) {
 	})
 
 	t.Run("valid word", func(t *testing.T) {
-		s := newSampleSpellchecker()
+		t.Parallel()
+
+		s := newSampleSpellchecker(t)
 		result := s.Suggest("orange", 5)
 		require.Equal(t, SuggestionResult{ExactMatch: true}, result)
 	})
 
 	t.Run("unknown word", func(t *testing.T) {
-		s := newSampleSpellchecker()
+		t.Parallel()
+
+		s := newSampleSpellchecker(t)
 		result := s.Suggest("qwerty", 5)
 		require.Equal(t, SuggestionResult{Suggestions: []Match{}}, result)
 	})

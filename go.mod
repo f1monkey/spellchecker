@@ -2,11 +2,7 @@ module github.com/f1monkey/spellchecker/v3
 
 go 1.25
 
-require (
-	github.com/agext/levenshtein v1.2.3
-	github.com/f1monkey/bitmap v1.4.0
-	github.com/stretchr/testify v1.8.4
-)
+require github.com/stretchr/testify v1.8.4
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect

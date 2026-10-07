@@ -21,8 +21,9 @@ func (m *Spellchecker) Save(w io.Writer) error {
 	return gob.NewEncoder(w).Encode(data)
 }
 
-// Load reads spellchecker data from the provided reader and decodes it
-func Load(reader io.Reader) (*Spellchecker, error) {
+// Load reads spellchecker data from the provided reader and decodes it.
+// tokenizer is used for AddPhrases after loading.
+func Load(reader io.Reader, tokenizer Tokenizer) (*Spellchecker, error) {
 	data := spellcheckerData{}
 
 	err := gob.NewDecoder(reader).Decode(&data)
@@ -31,6 +32,7 @@ func Load(reader io.Reader) (*Spellchecker, error) {
 	}
 
 	return &Spellchecker{
-		dict: data.Dict,
+		tokenizer: tokenizer,
+		dict:      data.Dict,
 	}, nil
 }

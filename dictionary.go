@@ -6,12 +6,11 @@ import (
 	"encoding/gob"
 	"sync"
 	"sync/atomic"
-
-	"github.com/f1monkey/bitmap"
 )
 
 type dictionary struct {
 	alphabet alphabet
+	zobrist  []uint64
 	nextID   func() uint32
 
 	words  map[uint32][]rune
@@ -19,21 +18,25 @@ type dictionary struct {
 	counts map[uint32]uint
 
 	index map[uint64][]uint32
+
+	pool *keyPool
 }
 
-func newDictionary(ab string) (*dictionary, error) {
-	alphabet, err := newAlphabet(ab)
+func newDictionary(ab ...Alphabet) (*dictionary, error) {
+	alphabet, err := newAlphabet(ab...)
 	if err != nil {
 		return nil, err
 	}
 
 	return &dictionary{
 		alphabet: alphabet,
+		zobrist:  alphabet.zobrist(),
 		nextID:   idSeq(0),
 		ids:      make(map[string]uint32),
 		words:    make(map[uint32][]rune),
 		counts:   make(map[uint32]uint),
 		index:    make(map[uint64][]uint32),
+		pool:     newKeyPool(),
 	}, nil
 }
 
@@ -56,24 +59,24 @@ func (d *dictionary) add(word string, n uint) uint32 {
 
 	d.counts[id] = n
 	d.words[id] = wordRunes
-	key := sum(d.alphabet.encode(wordRunes))
-	d.index[key] = append(d.index[key], id)
+	d.addToIndex(id, wordRunes)
 
 	return id
 }
 
-// inc increase word occurence counter
+func (d *dictionary) addToIndex(id uint32, word []rune) {
+	key := d.alphabet.key(word, d.zobrist)
+	d.index[key] = append(d.index[key], id)
+}
+
+// inc increase word occurrence counter
 func (d *dictionary) inc(id uint32, n uint) {
 	_, ok := d.counts[id]
 	if !ok {
 		return
 	}
-	d.counts[id] += n
-}
 
-type Match struct {
-	Value string
-	Score float64
+	d.counts[id] += n
 }
 
 func (d *dictionary) find(word string, n int, maxErrors int, fn FilterFunc) []Match {
@@ -84,78 +87,77 @@ func (d *dictionary) find(word string, n int, maxErrors int, fn FilterFunc) []Ma
 	result := newPriorityQueue(n)
 
 	wordRunes := []rune(word)
-	bmSrc := d.alphabet.encode(wordRunes)
+	srcKey := d.alphabet.key(wordRunes, d.zobrist)
 
 	// check for transposition or exact match and do early termination if found
 	// (the most common mistake is a transposition of letters)
-	d.fillWithCandidates(result, wordRunes, sum(bmSrc), fn)
+	d.fillWithCandidates(result, wordRunes, srcKey, maxErrors, fn)
+
 	if result.Len() != 0 {
 		return result.DrainSorted()
 	}
 
-	bitmaps := bitmapsPool.Get().(map[uint64]struct{})
-	d.computeCandidateBitmaps(bitmaps, bmSrc, maxErrors)
-	for bm := range bitmaps {
-		d.fillWithCandidates(result, wordRunes, bm, fn)
-	}
+	keys := d.pool.Get()
+	defer d.pool.Set(keys)
 
-	releaseBitmaps(bitmaps)
+	d.computeCandidateKeys(keys, srcKey, maxErrors)
+
+	for key := range keys {
+		d.fillWithCandidates(result, wordRunes, key, maxErrors, fn)
+	}
 
 	return result.DrainSorted()
 }
 
-func (d *dictionary) computeCandidateBitmaps(bitmaps map[uint64]struct{}, src bitmap.Bitmap32, maxFlips int) {
-	var dfs func(bm bitmap.Bitmap32, level, start int)
-	dfs = func(bm bitmap.Bitmap32, level, start int) {
-		key := sum(bm)
+// computeCandidateKeys collects index keys of letter sets that differ from src
+// by at most maxFlips symbols. Flipping a symbol is a XOR with its Zobrist value.
+func (d *dictionary) computeCandidateKeys(keys map[uint64]struct{}, src uint64, maxFlips int) {
+	var dfs func(key uint64, level, start int)
+
+	dfs = func(key uint64, level, start int) {
 		if len(d.index[key]) > 0 {
-			bitmaps[key] = struct{}{}
+			keys[key] = struct{}{}
 		}
 
 		if level == maxFlips {
 			return
 		}
 
-		for i := start; i < d.alphabet.len(); i++ {
-			bm.Xor(uint32(i)) // change one bit
-			dfs(bm, level+1, i+1)
-			bm.Xor(uint32(i)) // revert back
+		for i := start; i < len(d.zobrist); i++ {
+			dfs(key^d.zobrist[i], level+1, i+1)
 		}
 	}
 
-	dfs(src.Clone(), 0, 0)
+	dfs(src, 0, 0)
 }
 
-func (d *dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune, bm uint64, filter FilterFunc) {
-	ids := d.index[bm]
+func (d *dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune, key uint64, maxErrors int, filter FilterFunc) {
+	ids := d.index[key]
 	for _, id := range ids {
 		docWord, ok := d.words[id]
 		if !ok {
 			continue
 		}
 
-		score, ok := filter(wordRunes, docWord, d.counts[id])
+		score, ok := filter(wordRunes, docWord, d.counts[id], maxErrors)
 		if !ok {
 			continue
 		}
 
-		result.Push(Match{
-			Value: string(docWord),
-			Score: score,
-		})
+		result.Offer(score, docWord)
 	}
 }
 
 var _ encoding.BinaryMarshaler = (*dictionary)(nil)
 var _ encoding.BinaryUnmarshaler = (*dictionary)(nil)
 
+// dictData is the serialized form of the dictionary.
+// The index is not stored: it is rebuilt from Words on load.
 type dictData struct {
 	Alphabet alphabet
 	IDs      map[string]uint32
 	Words    map[uint32][]rune
 	Counts   map[uint32]uint
-
-	Index map[uint64][]uint32
 }
 
 func (d *dictionary) MarshalBinary() ([]byte, error) {
@@ -164,12 +166,11 @@ func (d *dictionary) MarshalBinary() ([]byte, error) {
 		IDs:      d.ids,
 		Words:    d.words,
 		Counts:   d.counts,
-		Index:    d.index,
 	}
 
 	buf := &bytes.Buffer{}
-	err := gob.NewEncoder(buf).Encode(data)
-	if err != nil {
+
+	if err := gob.NewEncoder(buf).Encode(data); err != nil {
 		return nil, err
 	}
 
@@ -178,16 +179,18 @@ func (d *dictionary) MarshalBinary() ([]byte, error) {
 
 func (d *dictionary) UnmarshalBinary(data []byte) error {
 	dictData := &dictData{}
+
 	err := gob.NewDecoder(bytes.NewBuffer(data)).Decode(dictData)
 	if err != nil {
 		return err
 	}
 
 	d.alphabet = dictData.Alphabet
+	d.zobrist = d.alphabet.zobrist()
 	d.ids = dictData.IDs
 	d.counts = dictData.Counts
-	d.index = dictData.Index
 	d.words = dictData.Words
+	d.pool = newKeyPool()
 
 	var max uint32
 	for _, id := range d.ids {
@@ -195,7 +198,16 @@ func (d *dictionary) UnmarshalBinary(data []byte) error {
 			max = id
 		}
 	}
+
 	d.nextID = idSeq(max)
+
+	// rebuild in id order, so buckets keep the insertion order
+	d.index = make(map[uint64][]uint32)
+	for id := uint32(1); id <= max; id++ {
+		if word, ok := d.words[id]; ok {
+			d.addToIndex(id, word)
+		}
+	}
 
 	return nil
 }
@@ -206,27 +218,28 @@ func idSeq(start uint32) func() uint32 {
 	}
 }
 
-func sum(b bitmap.Bitmap32) uint64 {
-	var result uint64
-	var mult uint64 = 1
-	for i := range b {
-		result += uint64(b[i]) * mult
-		mult *= 10
-	}
-
-	return result
+type keyPool struct {
+	inner *sync.Pool
 }
 
-func releaseBitmaps(m map[uint64]struct{}) {
-	for k := range m {
-		delete(m, k)
+func newKeyPool() *keyPool {
+	return &keyPool{
+		inner: &sync.Pool{
+			New: func() any {
+				return make(map[uint64]struct{}, 256)
+			},
+		},
 	}
-
-	bitmapsPool.Put(m)
 }
 
-var bitmapsPool = sync.Pool{
-	New: func() interface{} {
-		return make(map[uint64]struct{}, 256)
-	},
+func (p *keyPool) Get() map[uint64]struct{} {
+	return p.inner.Get().(map[uint64]struct{}) //nolint:forcetypeassert
+}
+
+func (p *keyPool) Set(value map[uint64]struct{}) {
+	for k := range value {
+		delete(value, k)
+	}
+
+	p.inner.Put(value)
 }

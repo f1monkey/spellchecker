@@ -1,0 +1,104 @@
+version: "2"
+run:
+  concurrency: 8
+  issues-exit-code: 1
+  tests: true
+output:
+  formats:
+    text:
+      path: stdout
+      print-linter-name: true
+      print-issued-lines: true
+linters:
+  default: none
+  enable:
+    - asciicheck
+    - bodyclose
+    - containedctx
+    - durationcheck
+    - errcheck
+    - errname
+    - errorlint
+    - forbidigo
+    - forcetypeassert
+    - funlen
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - gosec
+    - govet
+    - importas
+    - ineffassign
+    - makezero
+    - misspell
+    - mnd
+    - nestif
+    - paralleltest
+    - prealloc
+    - revive
+    - staticcheck
+    - thelper
+    - unparam
+    - unused
+    - whitespace
+    - wsl_v5
+    - modernize
+  settings:
+    funlen:
+      lines: 300
+      statements: 50
+    gocognit:
+      min-complexity: 20
+    goconst:
+      min-len: 2
+      min-occurrences: 2
+    gocritic:
+      disabled-checks:
+        - exitAfterDefer
+    gosec:
+      excludes:
+        - G103
+        - G115
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+    mnd:
+      ignored-functions:
+        - make
+      ignored-files:
+        - ".*_test\\.go"
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - funlen
+          - gosec
+          - govet
+          - unparam
+          - gocognit
+          - gocyclo
+          - goconst
+        path: _test\.go
+    paths:
+      - bin
+      - vendor
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - bin
+      - vendor
+      - third_party$
+      - builtin$
+      - examples$

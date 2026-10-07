@@ -1,21 +1,22 @@
 # Spellchecker
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/f1monkey/spellchecker.svg)](https://pkg.go.dev/github.com/f1monkey/spellchecker/v3)
+[![Go Reference](https://pkg.go.dev/badge/github.com/f1monkey/spellchecker.svg)](https://pkg.go.dev/badge/github.com/f1monkey/spellchecker/v3)
 [![CI](https://github.com/f1monkey/spellchecker/actions/workflows/test.yaml/badge.svg)](https://github.com/f1monkey/spellchecker/actions/workflows/test.yaml)
 
 Yet another spellchecker written in go.
 
 - [Spellchecker](#spellchecker)
-	- [Features:](#features)
-	- [Installation](#installation)
-	- [Usage](#usage)
-	- [Benchmarks](#benchmarks)
-		- [Test set 1:](#test-set-1)
-		- [Test set 2:](#test-set-2)
+  - [Features:](#features)
+  - [Installation](#installation)
+  - [Usage](#usage)
+  - [Benchmarks](#benchmarks)
+    - [Test set 1:](#test-set-1)
+    - [Test set 2:](#test-set-2)
 
 ## Features:
+
 - very compact database: ~1 MB for 30,000 unique words
-- average time to fix a single word: ~35 µs
+- average time to fix a single word: ~12 µs
 - achieves about 70–74% accuracy on Peter Norvig’s test sets (see [benchmarks](#benchmarks))
 - no built-in dictionary — you can provide any custom words, and the spellchecker will only know them
 
@@ -27,116 +28,96 @@ go get -v github.com/f1monkey/spellchecker/v3
 
 ## Usage
 
-
 ### Quick start
 
-1. Initialize the spellchecker. You need to pass an alphabet: a set of allowed characters that will be used for indexing and primary word checks. (All other characters will be ignored for these operations.)
+1. Initialize the spellchecker. Pass a tokenizer and one or more alphabets: sets of allowed characters used for indexing and lookup. Characters outside the alphabet are ignored for these operations.
 
 ```go
-	// Create a new instance
 	sc, err := spellchecker.New(
-		"abcdefghijklmnopqrstuvwxyz1234567890", // allowed symbols, other symbols will be ignored
+		spellchecker.NewWhitespaceTokenizer(), // or NewStandardTokenizer()/NewRegexpTokenizer()
+		spellchecker.EN, spellchecker.Numbers, // or a custom string like "abcdefghijklmnopqrstuvwxyz1234567890"
 	)
 ```
 
-2. Add some words to the dictionary:
-	1. from any `io.Reader`:
-	```go
-		in, _ := os.Open("data/sample.txt")
-		sc.AddFrom(in)
-	```
-	2. Or add words manually:
-	```go
-		sc.AddMany([]string{"lock", "stock", "and", "two", "smoking"})
-		sc.Add("barrels")
-	```
+`NewWhitespaceTokenizer` splits on Unicode whitespace (like Elasticsearch `whitespace`).
+`NewStandardTokenizer` approximates Elasticsearch `standard`: it keeps letters, digits, underscores and in-word apostrophes, and splits on hyphens and other punctuation. You can also implement `Tokenizer` inteface or use `NewRegexpTokenizer`.
+
+2. Add words to the dictionary:
+   1. Whole words (no splitting):
+
+   ```go
+   	sc.Add("lock", "stock", "barrels")
+   	sc.AddWeight(5, "hello", "world") // higher weight ranks the word higher in suggestions
+   ```
+
+   2. Phrases — tokenized with the tokenizer from `New`:
+
+   ```go
+   	sc.AddPhrases("lock stock and two smoking barrels")
+   	sc.AddPhraseWeight(10, "very common phrase")
+   ```
 
 3. Use the spellchecker:
-	1. Check if a word is correct:
-	```go
-		result := sc.IsCorrect("stock")
-		fmt.Println(result) // true
-	```
-	2. Suggest corrections:
-	```go
-		// Find up to 10 suggestions for a word
-		matches := sc.Suggest(nil, "rang", 10)
-		fmt.Println(matches) // [range, orange]
-	```
-### Options
+   1. Check if a word is correct:
+
+   ```go
+   	result := sc.IsCorrect("stock")
+   	fmt.Println(result) // true
+   ```
+
+   2. Suggest corrections:
+
+   ```go
+   	result := sc.Suggest("rang", 10)
+   	fmt.Println(result.Suggestions) // [{range ...} {orange ...}]
+   ```
 
 ### Options
 
-The spellchecker supports customizable options for both searching/suggesting corrections and adding words to the dictionary.
+These options are passed to `Suggest`.
 
-#### Search/Suggestion Options
+- **`WithMaxErrors(maxErrors int)`**
+  Sets the maximum allowed difference in bits between the input word and dictionary candidates.
+  - Deletion: 1 bit (e.g., "proble" → "problem")
+  - Insertion: 1 bit (e.g., "problemm" → "problem")
+  - Substitution: 2 bits (e.g., "problam" → "problem")
+  - Transposition: 0 bits (e.g., "problme" → "problem")
 
-These options are passed to the `Suggest` method (or to `SuggestWith...` helpers).
-
-- **`SuggestWithMaxErrors(maxErrors int)`**  
-  Sets the maximum allowed edit distance (in "bits") between the input word and dictionary candidates.  
-  - Deletion: 1 bit (e.g., "proble" → "problem")  
-  - Insertion: 1 bit (e.g., "problemm" → "problem")  
-  - Substitution: 2 bits (e.g., "problam" → "problem")  
-  - Transposition: 0 bits (e.g., "problme" → "problem")  
+  The same value is passed to the filter function as the maximum allowed edit distance.
 
   Default: `2`.
   Increasing this value beyond 2 is not recommended as it can significantly degrade performance.
 
-- **`SuggestWithFilterFunc(f FilterFunc)`**  
+- **`WithFilterFunc(f FilterFunc)`**
   Replaces the default scoring/filtering function with a custom one.  
   The function receives:
   - `src`: runes of the input word
   - `candidate`: runes of the dictionary word
   - `count`: frequency count of the candidate in the dictionary
+  - `maxErrors`: the value set by `WithMaxErrors`
 
   It must return:
   - a `float64` score (higher = better suggestion)
   - a `bool` indicating whether the candidate should be kept
 
-  The default filter uses Levenshtein distance (with costs: insert/delete=1, substitute=1, transpose=1), filters out candidates exceeding `maxErrors`, and boosts score based on word frequency and shared prefix/suffix length.
+  The default filter uses Levenshtein distance (insertion, deletion and substitution cost 1 each; a transposition of adjacent letters counts as 2 edits). It filters out candidates whose distance exceeds `maxErrors`, and boosts the score based on word frequency and shared prefix/suffix length.
 
 Example usage:
+
 ```go
-matches := sc.Suggest(
+result := sc.Suggest(
 	"rang",
 	10,
-	spellchecker.SuggestWithMaxErrors(1),
-	spellchecker.SuggestWithFilterFunc(myCustomFilter),
-)
-```
-
-#### Add Options
-These options are passed to `Add`, `AddMany`, or `AddFrom`.
-
-- **`AddWithWeight(weight uint)`**
-  Sets the frequency weight for added word(s). Higher weight increases the chance that the word will appear higher in suggestion results.
-  Default: 1.
-- **`AddWithSplitter(splitter bufio.SplitFunc)`**
-  Customizes how AddFrom(reader) splits the input stream into words.
-
-  The default splitter:
-    - Uses bufio.ScanWords as base
-    - Converts to lowercase
-    - Keeps only sequences matching [-\pL]+ (letters and hyphens)
-
-Example:
-```go
-sc.AddFrom(
-	file,
-	spellchecker.AddWithWeight(10),          // these words are very common
-	spellchecker.AddWithSplitter(customSplitter),
-)
-
-sc.AddMany([]string{"hello", "world"},
-	spellchecker.AddWithWeight(5),
+	spellchecker.WithMaxErrors(1),
+	spellchecker.WithFilterFunc(myCustomFilter),
 )
 ```
 
 ### Save/load
 
 ```go
-	sc, err := spellchecker.New("abc")
+	tok := spellchecker.NewWhitespaceTokenizer()
+	sc, err := spellchecker.New(tok, "abc")
 
 	// Save data to any io.Writer
 	out, err := os.Create("data/out.bin")
@@ -145,12 +126,12 @@ sc.AddMany([]string{"hello", "world"},
 	}
 	sc.Save(out)
 
-	// Load data back from io.Reader
-	in, err = os.Open("data/out.bin")
+	// Load data back from io.Reader (pass a tokenizer for AddPhrases after load)
+	in, err := os.Open("data/out.bin")
 	if err != nil {
 		panic(err)
 	}
-	sc, err = spellchecker.Load(in)
+	sc, err = spellchecker.Load(in, tok)
 	if err != nil {
 		panic(err)
 	}
@@ -163,27 +144,27 @@ Tests are based on data from [Peter Norvig's article about spelling correction](
 #### [Test set 1](http://norvig.com/spell-testset1.txt):
 
 ```
-Running tool: /usr/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norvig1$ github.com/f1monkey/spellchecker -count=1
+Running tool: /usr/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norvig1$ github.com/f1monkey/spellchecker/v3 -count=1
 
 goos: linux
 goarch: amd64
-pkg: github.com/f1monkey/spellchecker
-cpu: 13th Gen Intel(R) Core(TM) i9-13980HX
-Benchmark_Norvig1-32    	     357	   3305052 ns/op	        74.44 success_percent	       201.0 success_words	       270.0 total_words	  768899 B/op	   13302 allocs/op
+pkg: github.com/f1monkey/spellchecker/v3
+cpu: AMD Ryzen 9 9950X3D 16-Core Processor
+Benchmark_Norvig1-32    	     360	   3327587 ns/op	        74.07 success_percent	       200.0 success_words	       270.0 total_words	  119688 B/op	    2314 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	3.801s
+ok  	github.com/f1monkey/spellchecker/v3	3.565s
 ```
 
 #### [Test set 2](http://norvig.com/spell-testset2.txt):
 
 ```
-Running tool: /usr/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norvig2$ github.com/f1monkey/spellchecker -count=1
+Running tool: /usr/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norvig2$ github.com/f1monkey/spellchecker/v3 -count=1
 
 goos: linux
 goarch: amd64
-pkg: github.com/f1monkey/spellchecker
-cpu: 13th Gen Intel(R) Core(TM) i9-13980HX
-Benchmark_Norvig2-32    	     236	   5257185 ns/op	        71.25 success_percent	       285.0 success_words	       400.0 total_words	 1201260 B/op	   19346 allocs/op
+pkg: github.com/f1monkey/spellchecker/v3
+cpu: AMD Ryzen 9 9950X3D 16-Core Processor
+Benchmark_Norvig2-32    	     256	   4699043 ns/op	        71.00 success_percent	       284.0 success_words	       400.0 total_words	  170442 B/op	    3062 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker	4.350s
+ok  	github.com/f1monkey/spellchecker/v3	3.844s
 ```

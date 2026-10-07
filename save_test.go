@@ -9,7 +9,9 @@ import (
 )
 
 func Test_Spellchecker_Save(t *testing.T) {
-	m1 := newSampleSpellchecker()
+	t.Parallel()
+
+	m1 := newSampleSpellchecker(t)
 
 	filePath := path.Join(t.TempDir(), "spellchecker.bin")
 	file, err := os.Create(filePath)
@@ -22,13 +24,15 @@ func Test_Spellchecker_Save(t *testing.T) {
 	file, err = os.Open(filePath)
 	require.NoError(t, err)
 
-	m2, err := Load(file)
+	m2, err := Load(file, NewWhitespaceTokenizer())
 	require.NoError(t, err)
 
 	require.EqualValues(t, m1.dict.id("green"), m2.dict.id("green"))
 	require.EqualValues(t, m1.dict.nextID(), m2.dict.nextID())
+	require.Equal(t, m1.dict.index, m2.dict.index)
+	require.Equal(t, m1.dict.zobrist, m2.dict.zobrist)
 
-	matches := m2.dict.find("orange", 1, 2, defaultFilterFunc(2))
+	matches := m2.dict.find("orange", 1, 2, defaultFilterFunc)
 	require.Len(t, matches, 1)
 	require.Equal(t, matches[0].Value, "orange")
 	require.Greater(t, matches[0].Score, 0.0)
