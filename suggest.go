@@ -79,6 +79,10 @@ type searchOptions struct {
 var defaultFilterFunc FilterFunc = func(src, candidate []rune, count uint, maxErrors int) (float64, bool) {
 	const prefixCoefficitent = 1.5
 
+	if math.Abs(float64(len(src)-len(candidate))) > float64(maxErrors) {
+		return 0, false
+	}
+
 	distance, prefixLen, suffixLen := levenshtein.Calculate(src, candidate, 0, 1, 1, 1)
 	if distance > maxErrors {
 		return 0, false
