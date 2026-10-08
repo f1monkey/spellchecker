@@ -1,5 +1,10 @@
 package spellchecker
 
+type spellchecker interface {
+	Suggest(word string, n int, opts ...OptionFunc) SuggestionResult
+	AddWeight(weight uint, words ...string)
+}
+
 // Mistake is a bit set of mistakes found in a segment or fixed by a suggestion.
 // A single segment may contain several mistakes at once,
 // e.g. a wrong keyboard layout and a typo.
@@ -43,27 +48,42 @@ type PhraseFixResult struct {
 	Segments []Segment
 }
 
-type spellchecker interface {
-	Suggest(word string, n int, opts ...OptionFunc) SuggestionResult
-}
-
 // PhraseFixer fixes phrases: in addition to word typos it handles
 // missing and extra spaces and wrong keyboard layout.
 // It uses Spellchecker to look up and fix individual words.
 type PhraseFixer struct {
 	spellchecker spellchecker
+	tokenizer    Tokenizer
 }
 
 // NewPhraseFixer creates a PhraseFixer that uses the given spellchecker for word lookup.
 func NewPhraseFixer(
 	spellchecker spellchecker,
+	tokenizer Tokenizer,
 ) *PhraseFixer {
 	return &PhraseFixer{
 		spellchecker: spellchecker,
+		tokenizer:    tokenizer,
 	}
 }
 
 // Fix splits the phrase into segments and finds mistakes and fix suggestions for each of them.
 func (f *PhraseFixer) Fix(phrase string) PhraseFixResult {
 	return PhraseFixResult{} // @todo
+}
+
+// AddPhrases tokenizes each phrase with the spellchecker's tokenizer and adds
+// the resulting words with weight 1.
+func (f *PhraseFixer) AddPhrases(phrases ...string) {
+	f.AddPhraseWeight(1, phrases...)
+}
+
+// AddPhraseWeight is like AddPhrases, but each token is added with the given
+// weight.
+func (f *PhraseFixer) AddPhraseWeight(weight uint, phrases ...string) {
+	for _, phrase := range phrases {
+		for _, word := range f.tokenizer.Tokenize(phrase) {
+			f.spellchecker.AddWeight(weight, word)
+		}
+	}
 }

@@ -54,23 +54,21 @@ const (
 type Spellchecker struct {
 	mtx sync.RWMutex
 
-	tokenizer Tokenizer
-	dict      dict
+	dict dict
 }
 
 // New creates a spellchecker with the given tokenizer and alphabets.
 // Alphabets are the allowed characters for indexing and lookup; other
 // characters are ignored. Pass one or more constants such as EN, RU, Numbers,
 // or any custom string.
-func New(tokenizer Tokenizer, alphabets ...Alphabet) (*Spellchecker, error) {
+func New(alphabets ...Alphabet) (*Spellchecker, error) {
 	dict, err := dictionary.New(alphabets...)
 	if err != nil {
 		return nil, err
 	}
 
 	result := &Spellchecker{
-		tokenizer: tokenizer,
-		dict:      dict,
+		dict: dict,
 	}
 
 	return result, nil
@@ -109,22 +107,6 @@ func (s *Spellchecker) AddWeight(weight uint, words ...string) {
 		}
 
 		s.dict.Add(word, weight)
-	}
-}
-
-// AddPhrases tokenizes each phrase with the spellchecker's tokenizer and adds
-// the resulting words with weight 1.
-func (s *Spellchecker) AddPhrases(phrases ...string) {
-	s.AddPhraseWeight(1, phrases...)
-}
-
-// AddPhraseWeight is like AddPhrases, but each token is added with the given
-// weight.
-func (s *Spellchecker) AddPhraseWeight(weight uint, phrases ...string) {
-	for _, phrase := range phrases {
-		for _, word := range s.tokenizer.Tokenize(phrase) {
-			s.AddWeight(weight, word)
-		}
 	}
 }
 
@@ -177,8 +159,7 @@ func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) Suggestio
 }
 
 // Load reads spellchecker data from the provided reader and decodes it.
-// tokenizer is used for AddPhrases after loading.
-func Load(reader io.Reader, tokenizer Tokenizer) (*Spellchecker, error) {
+func Load(reader io.Reader) (*Spellchecker, error) {
 	data := spellcheckerData{}
 
 	err := gob.NewDecoder(reader).Decode(&data)
@@ -187,8 +168,7 @@ func Load(reader io.Reader, tokenizer Tokenizer) (*Spellchecker, error) {
 	}
 
 	return &Spellchecker{
-		tokenizer: tokenizer,
-		dict:      data.Dict,
+		dict: data.Dict,
 	}, nil
 }
 

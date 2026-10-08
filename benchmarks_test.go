@@ -159,7 +159,7 @@ func loadFullSpellchecker(tb testing.TB) *Spellchecker {
 
 	ff, err := os.Open("data/spellchecker.bin")
 	if err == nil {
-		s, err = Load(ff, NewWhitespaceTokenizer())
+		s, err = Load(ff)
 		require.NoError(tb, err)
 
 		return s
@@ -179,10 +179,12 @@ func loadFullSpellchecker(tb testing.TB) *Spellchecker {
 func newFullSpellchecker(tb testing.TB) *Spellchecker {
 	tb.Helper()
 
-	s, err := New(NewWhitespaceTokenizer(), alphabet.EN)
+	s, err := New(alphabet.EN)
 	require.NoError(tb, err)
 
-	s.AddPhrases(strings.ToLower(string(mustReadFile(tb, "data/big.txt"))))
+	for _, word := range NewWhitespaceTokenizer().Tokenize(strings.ToLower(string(mustReadFile(tb, "data/big.txt")))) {
+		s.Add(word)
+	}
 
 	return s
 }
@@ -190,10 +192,12 @@ func newFullSpellchecker(tb testing.TB) *Spellchecker {
 func newSampleSpellchecker(tb testing.TB) *Spellchecker {
 	tb.Helper()
 
-	s, err := New(NewWhitespaceTokenizer(), alphabet.EN)
+	s, err := New(alphabet.EN)
 	require.NoError(tb, err)
 
-	s.AddPhrases(strings.ToLower(string(mustReadFile(tb, "data/sample.txt"))))
+	for _, word := range NewWhitespaceTokenizer().Tokenize(strings.ToLower(string(mustReadFile(tb, "data/sample.txt")))) {
+		s.Add(word)
+	}
 
 	return s
 }
