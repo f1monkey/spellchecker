@@ -3,10 +3,12 @@ package spellchecker
 import (
 	"encoding/gob"
 	"io"
+	"math"
 	"sync"
 
 	"github.com/f1monkey/spellchecker/v4/internal/alphabet"
 	"github.com/f1monkey/spellchecker/v4/internal/dictionary"
+	"github.com/f1monkey/spellchecker/v4/internal/levenshtein"
 )
 
 type dict interface {
@@ -15,6 +17,30 @@ type dict interface {
 	Inc(id uint32, n uint)
 	Add(word string, n uint) uint32
 	Find(word string, n int, maxErrors int, fn ScoringFunc) []dictionary.Match
+}
+
+type OptionFunc func(opts *searchOptions)
+
+// WithMaxErrors sets the maximum allowed difference in bits
+// between the "search word" and a "dictionary word".
+// - deletion is a 1-bit change (proble → problem)
+// - insertion is a 1-bit change (problemm → problem)
+// - substitution is a 2-bit change (problam → problem)
+// - transposition is a 0-bit change (problme → problem)
+//
+// It is not recommended to set this value greater than 2,
+// as it can significantly affect performance.
+func WithMaxErrors(maxErrors int) OptionFunc {
+	return func(opts *searchOptions) {
+		opts.maxErrors = maxErrors
+	}
+}
+
+// WithScoringFunc set a ScoringFunc
+func WithScoringFunc(f ScoringFunc) OptionFunc {
+	return func(opts *searchOptions) {
+		opts.scoringFunc = f
+	}
 }
 
 type Alphabet = alphabet.Letters
@@ -119,6 +145,37 @@ func (m *Spellchecker) Save(w io.Writer) error {
 	return gob.NewEncoder(w).Encode(data)
 }
 
+type Suggestion = dictionary.Match
+
+type SuggestionResult struct {
+	ExactMatch  bool // if true, the word is correct
+	Suggestions []Suggestion
+}
+
+// Suggest find top n suggestions for the word.
+// Returns spellchecker scores along with words
+func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) SuggestionResult {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+
+	if s.dict.Has(word) {
+		return SuggestionResult{ExactMatch: true}
+	}
+
+	searchOpts := searchOptions{maxErrors: 2, scoringFunc: defaultScoringFunc}
+	for _, o := range opts {
+		o(&searchOpts)
+	}
+
+	if searchOpts.scoringFunc == nil {
+		searchOpts.scoringFunc = defaultScoringFunc
+	}
+
+	return SuggestionResult{
+		Suggestions: s.dict.Find(word, n, searchOpts.maxErrors, searchOpts.scoringFunc),
+	}
+}
+
 // Load reads spellchecker data from the provided reader and decodes it.
 // tokenizer is used for AddPhrases after loading.
 func Load(reader io.Reader, tokenizer Tokenizer) (*Spellchecker, error) {
@@ -133,4 +190,27 @@ func Load(reader io.Reader, tokenizer Tokenizer) (*Spellchecker, error) {
 		tokenizer: tokenizer,
 		dict:      data.Dict,
 	}, nil
+}
+
+type searchOptions struct {
+	maxErrors   int
+	scoringFunc ScoringFunc
+}
+
+// ScoringFunc compares the source word with a candidate word.
+// It returns the candidate's score and a boolean flag.
+// If the flag is false, the candidate will be completely filtered out.
+type ScoringFunc = dictionary.ScoringFunc
+
+var defaultScoringFunc ScoringFunc = func(src, candidate []rune, count uint, maxErrors int) (float64, bool) {
+	const prefixCoefficitent = 1.5
+
+	distance, prefixLen, suffixLen := levenshtein.Levenshtein(src, candidate, maxErrors)
+	if distance > maxErrors {
+		return 0, false
+	}
+
+	mult := math.Log1p(float64(count)) * math.Pow(prefixCoefficitent, float64(prefixLen+suffixLen))
+
+	return 1 / (1 + float64(distance*distance)) * mult, true
 }

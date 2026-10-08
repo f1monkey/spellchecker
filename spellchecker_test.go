@@ -166,6 +166,59 @@ func Test_Spellchecker_Save(t *testing.T) {
 	require.Equal(t, m1.Suggest("arang", 5), m2.Suggest("arang", 5))
 }
 
+func Test_Spellchecker_Suggest(t *testing.T) {
+	t.Parallel()
+
+	t.Run("fix", func(t *testing.T) {
+		t.Parallel()
+
+		s := newSampleSpellchecker(t)
+		result := s.Suggest("arang", 5)
+		require.Equal(t, SuggestionResult{
+			Suggestions: []Suggestion{
+				{Value: "orange", Score: 0.2772588722239781},
+				{Value: "range", Score: 0.13862943611198905},
+			},
+		}, result)
+	})
+
+	t.Run("custom max errors", func(t *testing.T) {
+		t.Parallel()
+
+		s := newSampleSpellchecker(t)
+		result := s.Suggest("rang", 5, WithMaxErrors(1))
+		require.Equal(t, SuggestionResult{
+			Suggestions: []Suggestion{
+				{Value: "range", Score: 1.7545288007923614},
+			},
+		}, result)
+
+		result = s.Suggest("arang", 5, WithMaxErrors(2))
+		require.Equal(t, SuggestionResult{
+			Suggestions: []Suggestion{
+				{Value: "orange", Score: 0.2772588722239781},
+				{Value: "range", Score: 0.13862943611198905},
+			},
+		}, result)
+	})
+
+	t.Run("valid word", func(t *testing.T) {
+		t.Parallel()
+
+		s := newSampleSpellchecker(t)
+		result := s.Suggest("orange", 5)
+		require.Equal(t, SuggestionResult{ExactMatch: true}, result)
+	})
+
+	t.Run("unknown word", func(t *testing.T) {
+		t.Parallel()
+
+		s := newSampleSpellchecker(t)
+		result := s.Suggest("qwerty", 5)
+		require.Equal(t, SuggestionResult{Suggestions: []Suggestion{}}, result)
+	})
+}
+
 type tokenizerMock struct{}
 
 func (m *tokenizerMock) Tokenize(input string) []string {
