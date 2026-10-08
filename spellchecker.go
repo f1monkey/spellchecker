@@ -14,7 +14,7 @@ type dict interface {
 	Has(word string) bool
 	Inc(id uint32, n uint)
 	Add(word string, n uint) uint32
-	Find(word string, n int, maxErrors int, fn FilterFunc) []dictionary.Match
+	Find(word string, n int, maxErrors int, fn ScoringFunc) []dictionary.Match
 }
 
 type Alphabet = alphabet.Letters
