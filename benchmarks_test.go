@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/f1monkey/spellchecker/v3/internal/alphabet"
+	"github.com/f1monkey/spellchecker/v4/internal/alphabet"
 	"github.com/stretchr/testify/require"
 )
 

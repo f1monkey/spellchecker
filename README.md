@@ -1,6 +1,6 @@
 # Spellchecker
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/f1monkey/spellchecker.svg)](https://pkg.go.dev/badge/github.com/f1monkey/spellchecker/v3)
+[![Go Reference](https://pkg.go.dev/badge/github.com/f1monkey/spellchecker.svg)](https://pkg.go.dev/badge/github.com/f1monkey/spellchecker/v4)
 [![CI](https://github.com/f1monkey/spellchecker/actions/workflows/test.yaml/badge.svg)](https://github.com/f1monkey/spellchecker/actions/workflows/test.yaml)
 
 Yet another spellchecker written in go.
@@ -23,7 +23,7 @@ Yet another spellchecker written in go.
 ## Installation
 
 ```
-go get -v github.com/f1monkey/spellchecker/v3
+go get -v github.com/f1monkey/spellchecker/v4
 ```
 
 ## Usage
@@ -144,27 +144,27 @@ Tests are based on data from [Peter Norvig's article about spelling correction](
 #### [Test set 1](http://norvig.com/spell-testset1.txt):
 
 ```
-Running tool: /usr/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norvig1$ github.com/f1monkey/spellchecker/v3 -count=1
+Running tool: /usr/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norvig1$ github.com/f1monkey/spellchecker/v4 -count=1
 
 goos: linux
 goarch: amd64
-pkg: github.com/f1monkey/spellchecker/v3
+pkg: github.com/f1monkey/spellchecker/v4
 cpu: AMD Ryzen 9 9950X3D 16-Core Processor
 Benchmark_Norvig1-32    	     360	   3327587 ns/op	        74.07 success_percent	       200.0 success_words	       270.0 total_words	  119688 B/op	    2314 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker/v3	3.565s
+ok  	github.com/f1monkey/spellchecker/v4	3.565s
 ```
 
 #### [Test set 2](http://norvig.com/spell-testset2.txt):
 
 ```
-Running tool: /usr/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norvig2$ github.com/f1monkey/spellchecker/v3 -count=1
+Running tool: /usr/bin/go test -benchmem -run=^$ -bench ^Benchmark_Norvig2$ github.com/f1monkey/spellchecker/v4 -count=1
 
 goos: linux
 goarch: amd64
-pkg: github.com/f1monkey/spellchecker/v3
+pkg: github.com/f1monkey/spellchecker/v4
 cpu: AMD Ryzen 9 9950X3D 16-Core Processor
 Benchmark_Norvig2-32    	     256	   4699043 ns/op	        71.00 success_percent	       284.0 success_words	       400.0 total_words	  170442 B/op	    3062 allocs/op
 PASS
-ok  	github.com/f1monkey/spellchecker/v3	3.844s
+ok  	github.com/f1monkey/spellchecker/v4	3.844s
 ```

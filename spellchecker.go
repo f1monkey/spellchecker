@@ -5,8 +5,8 @@ import (
 	"io"
 	"sync"
 
-	"github.com/f1monkey/spellchecker/v3/internal/alphabet"
-	"github.com/f1monkey/spellchecker/v3/internal/dictionary"
+	"github.com/f1monkey/spellchecker/v4/internal/alphabet"
+	"github.com/f1monkey/spellchecker/v4/internal/dictionary"
 )
 
 type dict interface {

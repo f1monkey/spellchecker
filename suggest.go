@@ -3,8 +3,8 @@ package spellchecker
 import (
 	"math"
 
-	"github.com/f1monkey/spellchecker/v3/internal/dictionary"
-	"github.com/f1monkey/spellchecker/v3/internal/levenshtein"
+	"github.com/f1monkey/spellchecker/v4/internal/dictionary"
+	"github.com/f1monkey/spellchecker/v4/internal/levenshtein"
 )
 
 const DefaultMaxErrors = 2
