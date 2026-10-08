@@ -7,7 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/f1monkey/spellchecker/v3/internal/alphabet"
+	"github.com/f1monkey/spellchecker/v4/internal/alphabet"
 )
 
 type FilterFunc func(src, candidate []rune, count uint, maxErrors int) (float64, bool)

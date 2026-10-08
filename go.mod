@@ -1,4 +1,4 @@
-module github.com/f1monkey/spellchecker/v3
+module github.com/f1monkey/spellchecker/v4
 
 go 1.27
 
