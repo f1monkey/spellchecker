@@ -83,12 +83,12 @@ These options are passed to `Suggest`.
   - Substitution: 2 bits (e.g., "problam" → "problem")
   - Transposition: 0 bits (e.g., "problme" → "problem")
 
-  The same value is passed to the filter function as the maximum allowed edit distance.
+  The same value is passed to the scoring function as the maximum allowed edit distance.
 
   Default: `2`.
   Increasing this value beyond 2 is not recommended as it can significantly degrade performance.
 
-- **`WithFilterFunc(f FilterFunc)`**
+- **`WithScoringFunc(f ScoringFunc)`**
   Replaces the default scoring/filtering function with a custom one.  
   The function receives:
   - `src`: runes of the input word
@@ -100,7 +100,7 @@ These options are passed to `Suggest`.
   - a `float64` score (higher = better suggestion)
   - a `bool` indicating whether the candidate should be kept
 
-  The default filter uses Levenshtein distance (insertion, deletion and substitution cost 1 each; a transposition of adjacent letters counts as 2 edits). It filters out candidates whose distance exceeds `maxErrors`, and boosts the score based on word frequency and shared prefix/suffix length.
+  The default scoring uses Levenshtein distance (insertion, deletion and substitution cost 1 each; a transposition of adjacent letters counts as 2 edits). It scorings out candidates whose distance exceeds `maxErrors`, and boosts the score based on word frequency and shared prefix/suffix length.
 
 Example usage:
 
@@ -109,7 +109,7 @@ result := sc.Suggest(
 	"rang",
 	10,
 	spellchecker.WithMaxErrors(1),
-	spellchecker.WithFilterFunc(myCustomFilter),
+	spellchecker.WithScoringFunc(myCustomScoring),
 )
 ```
 
@@ -150,7 +150,7 @@ goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker/v4
 cpu: AMD Ryzen 9 9950X3D 16-Core Processor
-Benchmark_Norvig1-32    	     360	   3327587 ns/op	        74.07 success_percent	       200.0 success_words	       270.0 total_words	  119688 B/op	    2314 allocs/op
+Benchmark_Norvig1-32                             	     363	   3234033 ns/op	        74.07 success_percent	       200.0 success_words	       270.0 total_words	  119670 B/op	    2314 allocs/op
 PASS
 ok  	github.com/f1monkey/spellchecker/v4	3.565s
 ```
@@ -164,7 +164,7 @@ goos: linux
 goarch: amd64
 pkg: github.com/f1monkey/spellchecker/v4
 cpu: AMD Ryzen 9 9950X3D 16-Core Processor
-Benchmark_Norvig2-32    	     256	   4699043 ns/op	        71.00 success_percent	       284.0 success_words	       400.0 total_words	  170442 B/op	    3062 allocs/op
+Benchmark_Norvig2-32                             	     258	   4379073 ns/op	        71.25 success_percent	       285.0 success_words	       400.0 total_words	  170356 B/op	    3063 allocs/op
 PASS
 ok  	github.com/f1monkey/spellchecker/v4	3.844s
 ```

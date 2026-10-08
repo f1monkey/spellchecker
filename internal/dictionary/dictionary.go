@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding"
 	"encoding/gob"
+	"math"
 	"sync"
 	"sync/atomic"
 
 	"github.com/f1monkey/spellchecker/v4/internal/alphabet"
 )
 
-type FilterFunc func(src, candidate []rune, count uint, maxErrors int) (float64, bool)
+type ScoringFunc func(src, candidate []rune, count uint, maxErrors int) (float64, bool)
 
 type Match struct {
 	Value string
@@ -83,7 +84,7 @@ func (d *Dictionary) Inc(id uint32, n uint) {
 	d.counts[id] += n
 }
 
-func (d *Dictionary) Find(word string, n int, maxErrors int, fn FilterFunc) []Match {
+func (d *Dictionary) Find(word string, n int, maxErrors int, fn ScoringFunc) []Match {
 	if maxErrors <= 0 {
 		return nil
 	}
@@ -140,11 +141,15 @@ func (d *Dictionary) computeCandidateKeys(keys map[uint64]struct{}, src uint64, 
 	dfs(src, 0, 0)
 }
 
-func (d *Dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune, key uint64, maxErrors int, filter FilterFunc) {
+func (d *Dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune, key uint64, maxErrors int, filter ScoringFunc) {
 	ids := d.index[key]
 	for _, id := range ids {
 		docWord, ok := d.words[id]
 		if !ok {
+			continue
+		}
+
+		if math.Abs(float64(len(docWord)-len(wordRunes))) > float64(maxErrors) {
 			continue
 		}
 

@@ -9,10 +9,10 @@ import (
 
 const DefaultMaxErrors = 2
 
-// FilterFunc compares the source word with a candidate word.
+// ScoringFunc compares the source word with a candidate word.
 // It returns the candidate's score and a boolean flag.
 // If the flag is false, the candidate will be completely filtered out.
-type FilterFunc = dictionary.FilterFunc
+type ScoringFunc = dictionary.ScoringFunc
 
 type OptionFunc func(opts *searchOptions)
 
@@ -31,10 +31,10 @@ func WithMaxErrors(maxErrors int) OptionFunc {
 	}
 }
 
-// WithFilterFunc set a FilterFunc
-func WithFilterFunc(f FilterFunc) OptionFunc {
+// WithScoringFunc set a ScoringFunc
+func WithScoringFunc(f ScoringFunc) OptionFunc {
 	return func(opts *searchOptions) {
-		opts.filterFunc = f
+		opts.scoringFunc = f
 	}
 }
 
@@ -55,31 +55,27 @@ func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) Suggestio
 		return SuggestionResult{ExactMatch: true}
 	}
 
-	searchOpts := searchOptions{maxErrors: DefaultMaxErrors, filterFunc: defaultFilterFunc}
+	searchOpts := searchOptions{maxErrors: DefaultMaxErrors, scoringFunc: defaultScoringFunc}
 	for _, o := range opts {
 		o(&searchOpts)
 	}
 
-	if searchOpts.filterFunc == nil {
-		searchOpts.filterFunc = defaultFilterFunc
+	if searchOpts.scoringFunc == nil {
+		searchOpts.scoringFunc = defaultScoringFunc
 	}
 
 	return SuggestionResult{
-		Suggestions: s.dict.Find(word, n, searchOpts.maxErrors, searchOpts.filterFunc),
+		Suggestions: s.dict.Find(word, n, searchOpts.maxErrors, searchOpts.scoringFunc),
 	}
 }
 
 type searchOptions struct {
-	maxErrors  int
-	filterFunc FilterFunc
+	maxErrors   int
+	scoringFunc ScoringFunc
 }
 
-var defaultFilterFunc FilterFunc = func(src, candidate []rune, count uint, maxErrors int) (float64, bool) {
+var defaultScoringFunc ScoringFunc = func(src, candidate []rune, count uint, maxErrors int) (float64, bool) {
 	const prefixCoefficitent = 1.5
-
-	if math.Abs(float64(len(src)-len(candidate))) > float64(maxErrors) {
-		return 0, false
-	}
 
 	distance, prefixLen, suffixLen := levenshtein.Levenshtein(src, candidate, maxErrors)
 	if distance > maxErrors {
