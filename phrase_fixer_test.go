@@ -1,0 +1,278 @@
+package spellchecker
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+func Test_NewPhraseFixer(t *testing.T) {
+	t.Parallel()
+
+	sc := &spellcheckerMock{}
+	tok := NewWhitespaceTokenizer()
+
+	f := NewPhraseFixer(sc, tok)
+	require.Same(t, sc, f.spellchecker)
+	require.Same(t, tok, f.tokenizer)
+}
+
+func Test_PhraseFixer_AddPhrases(t *testing.T) {
+	t.Parallel()
+
+	sc := &spellcheckerMock{}
+	f := NewPhraseFixer(sc, NewStandardTokenizer())
+
+	f.AddPhrases("hello, world", "", "папа-кот", "hello")
+
+	require.Equal(t, map[string]uint{
+		"hello": 2,
+		"world": 1,
+		"папа":  1,
+		"кот":   1,
+	}, sc.weights)
+}
+
+func Test_PhraseFixer_AddPhraseWeight(t *testing.T) {
+	t.Parallel()
+
+	sc := &spellcheckerMock{}
+	f := NewPhraseFixer(sc, NewWhitespaceTokenizer())
+
+	f.AddPhraseWeight(5, "foo bar")
+
+	require.Equal(t, map[string]uint{
+		"foo": 5,
+		"bar": 5,
+	}, sc.weights)
+}
+
+func Test_PhraseFixer_Fix(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		results map[string]SuggestionResult
+		phrase  string
+		want    PhraseFixResult
+	}{
+		{
+			name:   "empty phrase",
+			phrase: "",
+			want:   PhraseFixResult{},
+		},
+		{
+			name: "all words are correct",
+			results: map[string]SuggestionResult{
+				"hello": {ExactMatch: true},
+				"world": {ExactMatch: true},
+			},
+			phrase: "hello world",
+			want: PhraseFixResult{Segments: []Segment{
+				{Start: 0, End: 5, Mistakes: NoMistake},
+				{Start: 6, End: 11, Mistakes: NoMistake},
+			}},
+		},
+		{
+			name: "typo with suggestions",
+			results: map[string]SuggestionResult{
+				"helo":  {Suggestions: []Suggestion{{Value: "hello", Score: 2}, {Value: "help", Score: 1}}},
+				"world": {ExactMatch: true},
+			},
+			phrase: "helo world",
+			want: PhraseFixResult{Segments: []Segment{
+				{
+					Start: 0,
+					End:   4,
+					Suggestions: []FixSuggestion{
+						{Value: "hello", Score: 2, Mistakes: MistakeTypo},
+						{Value: "help", Score: 1, Mistakes: MistakeTypo},
+					},
+					Mistakes: MistakeTypo,
+				},
+				{Start: 5, End: 10, Mistakes: NoMistake},
+			}},
+		},
+		{
+			name:   "unknown word without suggestions",
+			phrase: "qwzx",
+			want: PhraseFixResult{Segments: []Segment{
+				{Start: 0, End: 4, Mistakes: MistakeUnknownWord},
+			}},
+		},
+		{
+			name: "byte offsets for multibyte text and extra whitespace",
+			results: map[string]SuggestionResult{
+				"привет": {ExactMatch: true},
+				"мир":    {ExactMatch: true},
+			},
+			phrase: "  привет \t мир ",
+			want: PhraseFixResult{Segments: []Segment{
+				{Start: 2, End: 14, Mistakes: NoMistake},
+				{Start: 17, End: 23, Mistakes: NoMistake},
+			}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := NewPhraseFixer(&spellcheckerMock{results: tt.results}, NewWhitespaceTokenizer())
+
+			got := f.Fix(tt.phrase, 3)
+			require.Equal(t, tt.want, got)
+
+			for _, s := range got.Segments {
+				require.LessOrEqual(t, s.Start, s.End)
+				require.LessOrEqual(t, s.End, len(tt.phrase))
+			}
+		})
+	}
+}
+
+func Test_PhraseFixer_Fix_Integration(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		tokenizer Tokenizer
+		phrase    string
+		n         int
+		opts      []OptionFunc
+		want      []segmentView
+	}{
+		{
+			name:      "empty phrase",
+			tokenizer: NewWhitespaceTokenizer(),
+			phrase:    "",
+			n:         5,
+			want:      []segmentView{},
+		},
+		{
+			name:      "correct phrase",
+			tokenizer: NewWhitespaceTokenizer(),
+			phrase:    "green tea",
+			n:         5,
+			want: []segmentView{
+				{Text: "green", Mistakes: NoMistake},
+				{Text: "tea", Mistakes: NoMistake},
+			},
+		},
+		{
+			name:      "typo",
+			tokenizer: NewWhitespaceTokenizer(),
+			phrase:    "arang",
+			n:         5,
+			want: []segmentView{
+				{Text: "arang", Suggestions: []string{"orange", "range"}, Mistakes: MistakeTypo},
+			},
+		},
+		{
+			name:      "n limits suggestions",
+			tokenizer: NewWhitespaceTokenizer(),
+			phrase:    "arang",
+			n:         1,
+			want: []segmentView{
+				{Text: "arang", Suggestions: []string{"orange"}, Mistakes: MistakeTypo},
+			},
+		},
+		{
+			name:      "options are applied",
+			tokenizer: NewWhitespaceTokenizer(),
+			phrase:    "rang",
+			n:         5,
+			opts:      []OptionFunc{WithMaxErrors(1)},
+			want: []segmentView{
+				{Text: "rang", Suggestions: []string{"range"}, Mistakes: MistakeTypo},
+			},
+		},
+		{
+			name:      "unknown word",
+			tokenizer: NewWhitespaceTokenizer(),
+			phrase:    "qwerty",
+			n:         5,
+			want: []segmentView{
+				{Text: "qwerty", Mistakes: MistakeUnknownWord},
+			},
+		},
+		{
+			name:      "correct, typo and unknown words together",
+			tokenizer: NewWhitespaceTokenizer(),
+			phrase:    "  blak   tea\tqwerty ",
+			n:         5,
+			want: []segmentView{
+				{Text: "blak", Suggestions: []string{"black"}, Mistakes: MistakeTypo},
+				{Text: "tea", Mistakes: NoMistake},
+				{Text: "qwerty", Mistakes: MistakeUnknownWord},
+			},
+		},
+		{
+			name:      "standard tokenizer skips punctuation",
+			tokenizer: NewStandardTokenizer(),
+			phrase:    "green-tea, cofee!",
+			n:         5,
+			want: []segmentView{
+				{Text: "green", Mistakes: NoMistake},
+				{Text: "tea", Mistakes: NoMistake},
+				{Text: "cofee", Suggestions: []string{"coffee"}, Mistakes: MistakeTypo},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := NewPhraseFixer(newSampleSpellchecker(t), tt.tokenizer)
+
+			got := f.Fix(tt.phrase, tt.n, tt.opts...)
+			require.Equal(t, tt.want, segmentViews(t, tt.phrase, got))
+		})
+	}
+}
+
+type spellcheckerMock struct {
+	results map[string]SuggestionResult
+	weights map[string]uint
+}
+
+func (m *spellcheckerMock) Suggest(word string, _ int, _ ...OptionFunc) SuggestionResult {
+	return m.results[word]
+}
+
+func (m *spellcheckerMock) AddWeight(weight uint, words ...string) {
+	if m.weights == nil {
+		m.weights = make(map[string]uint)
+	}
+
+	for _, w := range words {
+		m.weights[w] += weight
+	}
+}
+
+// segmentView is a Segment with its text and suggestion values instead of offsets and scores.
+type segmentView struct {
+	Text        string
+	Suggestions []string
+	Mistakes    Mistake
+}
+
+func segmentViews(t *testing.T, phrase string, result PhraseFixResult) []segmentView {
+	t.Helper()
+
+	views := make([]segmentView, 0, len(result.Segments))
+	for _, s := range result.Segments {
+		v := segmentView{
+			Text:     phrase[s.Start:s.End],
+			Mistakes: s.Mistakes,
+		}
+		for _, fix := range s.Suggestions {
+			v.Suggestions = append(v.Suggestions, fix.Value)
+		}
+
+		views = append(views, v)
+	}
+
+	return views
+}

@@ -182,8 +182,8 @@ func newFullSpellchecker(tb testing.TB) *Spellchecker {
 	s, err := New(alphabet.EN)
 	require.NoError(tb, err)
 
-	for _, word := range NewWhitespaceTokenizer().Tokenize(strings.ToLower(string(mustReadFile(tb, "data/big.txt")))) {
-		s.Add(word)
+	for _, token := range NewWhitespaceTokenizer().Tokenize(strings.ToLower(string(mustReadFile(tb, "data/big.txt")))) {
+		s.Add(token.Text)
 	}
 
 	return s
@@ -195,8 +195,8 @@ func newSampleSpellchecker(tb testing.TB) *Spellchecker {
 	s, err := New(alphabet.EN)
 	require.NoError(tb, err)
 
-	for _, word := range NewWhitespaceTokenizer().Tokenize(strings.ToLower(string(mustReadFile(tb, "data/sample.txt")))) {
-		s.Add(word)
+	for _, token := range NewWhitespaceTokenizer().Tokenize(strings.ToLower(string(mustReadFile(tb, "data/sample.txt")))) {
+		s.Add(token.Text)
 	}
 
 	return s

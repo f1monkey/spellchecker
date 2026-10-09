@@ -11,6 +11,8 @@ import (
 	"github.com/f1monkey/spellchecker/v4/internal/levenshtein"
 )
 
+const defaultMaxErrors = 2
+
 type dict interface {
 	ID(word string) uint32
 	Has(word string) bool
@@ -144,7 +146,7 @@ func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) Suggestio
 		return SuggestionResult{ExactMatch: true}
 	}
 
-	searchOpts := searchOptions{maxErrors: 2, scoringFunc: defaultScoringFunc}
+	searchOpts := searchOptions{maxErrors: defaultMaxErrors, scoringFunc: defaultScoringFunc}
 	for _, o := range opts {
 		o(&searchOpts)
 	}

@@ -52,7 +52,7 @@ func TestWhitespaceTokenizer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			require.Equal(t, tt.want, tok.Tokenize(tt.input))
+			require.Equal(t, tt.want, tokenTexts(t, tt.input, tok.Tokenize(tt.input)))
 		})
 	}
 }
@@ -108,7 +108,68 @@ func TestStandardTokenizer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			require.Equal(t, tt.want, tok.Tokenize(tt.input))
+			require.Equal(t, tt.want, tokenTexts(t, tt.input, tok.Tokenize(tt.input)))
 		})
 	}
+}
+
+func TestTokenizerOffsets(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		tok   Tokenizer
+		input string
+		want  []Token
+	}{
+		{
+			name:  "whitespace ascii",
+			tok:   NewWhitespaceTokenizer(),
+			input: "  hello \tworld ",
+			want: []Token{
+				{Text: "hello", Start: 2, End: 7},
+				{Text: "world", Start: 9, End: 14},
+			},
+		},
+		{
+			name:  "whitespace multibyte",
+			tok:   NewWhitespaceTokenizer(),
+			input: "привет 😀 мир",
+			want: []Token{
+				{Text: "привет", Start: 0, End: 12},
+				{Text: "😀", Start: 13, End: 17},
+				{Text: "мир", Start: 18, End: 24},
+			},
+		},
+		{
+			name:  "standard punctuation and emoji",
+			tok:   NewStandardTokenizer(),
+			input: "папа-кот😀dog’s",
+			want: []Token{
+				{Text: "папа", Start: 0, End: 8},
+				{Text: "кот", Start: 9, End: 15},
+				{Text: "dog’s", Start: 19, End: 26},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, tt.want, tt.tok.Tokenize(tt.input))
+		})
+	}
+}
+
+func tokenTexts(t *testing.T, input string, tokens []Token) []string {
+	t.Helper()
+
+	texts := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		require.Equal(t, token.Text, input[token.Start:token.End])
+		texts = append(texts, token.Text)
+	}
+
+	return texts
 }
