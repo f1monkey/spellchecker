@@ -1,14 +1,10 @@
 package spellchecker
 
-// stackRowSize is the longest (trimmed) word whose DP row fits on the stack.
+// stackRowSize is the max word length whose row is allocated on the stack.
 const stackRowSize = 64
 
-// levenshtein returns the Levenshtein distance between a and b along with the
-// lengths of their common prefix and suffix.
-//
-// The calculation is bounded by maxDist: if the distance is greater than
-// maxDist, maxDist+1 is returned. Only the diagonal band of width 2*maxDist+1
-// is computed, and the calculation stops as soon as a whole row exceeds maxDist.
+// levenshtein returns the distance between a and b, capped at maxDist+1,
+// and the lengths of their common prefix and suffix.
 func levenshtein(a, b []rune, maxDist int) (dist, prefixLen, suffixLen int) {
 	for prefixLen < len(a) && prefixLen < len(b) && a[prefixLen] == b[prefixLen] {
 		prefixLen++
@@ -47,7 +43,6 @@ func boundedDistance(a, b []rune, maxDist int) int {
 
 	var stack [stackRowSize + 1]int
 
-	// row[j] is the distance between a[:i] and b[:j]; cells outside the band hold limit.
 	row := stack[:]
 	if m+1 > len(stack) {
 		row = make([]int, m+1)

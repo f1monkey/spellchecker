@@ -9,39 +9,28 @@ import (
 
 const defaultMaxErrors = 2
 
-// Mistake is a bit set of mistakes found in a segment or fixed by a suggestion.
-// A single segment may contain several mistakes at once,
-// e.g. a wrong keyboard layout and a typo.
+// Mistake is a set of mistakes.
 type Mistake int
 
 // NoMistake means the segment is correct.
 const NoMistake Mistake = 0
 
 const (
-	// MistakeTypo is a misspelled word (insertion, deletion, substitution or transposition).
+	// MistakeTypo is a misspelled word.
 	MistakeTypo Mistake = 1 << iota
-	// MistakeUnknownWord is a word that is not in the dictionary and has no fix suggestions.
-	// It is never set together with other mistakes.
+	// MistakeUnknownWord is a word that is not in the dictionary and has no suggestions.
 	MistakeUnknownWord
-	// MistakeLayout is a word typed in a wrong keyboard layout, e.g. "ghbdtn" instead of "привет".
+	// MistakeLayout is a word typed in a wrong keyboard layout.
 	MistakeLayout
 )
 
 // Has reports whether m contains any of the mistakes in x.
-// Has(NoMistake) is always false; compare with NoMistake to check for a correct segment.
 func (m Mistake) Has(x Mistake) bool { return m&x != 0 }
 
 type OptionFunc func(opts *searchOptions)
 
-// WithMaxErrors sets the maximum allowed difference in bits
-// between the "search word" and a "dictionary word".
-// - deletion is a 1-bit change (proble → problem)
-// - insertion is a 1-bit change (problemm → problem)
-// - substitution is a 2-bit change (problam → problem)
-// - transposition is a 0-bit change (problme → problem)
-//
-// It is not recommended to set this value greater than 2,
-// as it can significantly affect performance.
+// WithMaxErrors sets the max allowed edit distance to a dictionary word.
+// Values greater than 2 significantly affect performance.
 func WithMaxErrors(maxErrors int) OptionFunc {
 	return func(opts *searchOptions) {
 		opts.maxErrors = maxErrors
@@ -61,10 +50,7 @@ type Spellchecker struct {
 	dict *dictionary
 }
 
-// New creates a spellchecker with the given tokenizer and alphabets.
-// Alphabets are the allowed characters for indexing and lookup; other
-// characters are ignored. Pass one or more constants such as EN, RU, Numbers,
-// or any custom string.
+// New creates a spellchecker for the given alphabets. Other characters are ignored.
 func New(alphabets ...Alphabet) (*Spellchecker, error) {
 	dict, err := newDictionary(alphabets...)
 	if err != nil {
@@ -86,15 +72,12 @@ func (s *Spellchecker) IsCorrect(word string) bool {
 	return s.dict.Has(word)
 }
 
-// Add adds each argument as a whole dictionary word. Strings are not split;
-// use AddPhrases to tokenize text.
+// Add adds each argument as a whole word.
 func (s *Spellchecker) Add(words ...string) {
 	s.AddWeight(1, words...)
 }
 
-// AddWeight is like Add, but each word is stored with the given frequency
-// weight. If the word is already in the dictionary, the weight is added to
-// its count. Higher weight ranks the word higher in suggestions.
+// AddWeight adds words with the given weight. Higher weight ranks a word higher.
 func (s *Spellchecker) AddWeight(weight uint, words ...string) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
@@ -114,34 +97,15 @@ func (s *Spellchecker) AddWeight(weight uint, words ...string) {
 	}
 }
 
-type spellcheckerData struct {
-	Dict *dictionary
-}
-
-// Save encodes spellchecker data and writes it to the provided writer
-func (m *Spellchecker) Save(w io.Writer) error {
-	m.mtx.RLock()
-	defer m.mtx.RUnlock()
-
-	//nolint:forcetypeassert
-	data := spellcheckerData{
-		Dict: m.dict,
-	}
-
-	return gob.NewEncoder(w).Encode(data)
-}
-
-// SuggestionResult is a group of fix candidates for a word that fix the same mistakes.
+// SuggestionResult is the result of Suggest.
 type SuggestionResult struct {
-	// Mistakes is a set of mistakes fixed by Matches.
-	// NoMistake if the word is correct, MistakeUnknownWord if there are no Matches.
+	// Mistakes are mistakes found in the word.
 	Mistakes Mistake
-	// Suggestions are fix candidates ordered from best to worst. Empty for correct and unknown words.
+	// Suggestions are fix candidates, best first.
 	Suggestions []Suggestion
 }
 
-// Suggest find top n suggestions for the word.
-// Returns spellchecker scores along with words
+// Suggest returns up to n fix suggestions for the word.
 func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) SuggestionResult {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
@@ -170,6 +134,23 @@ func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) Suggestio
 	}
 }
 
+type spellcheckerData struct {
+	Dict *dictionary
+}
+
+// Save encodes spellchecker data and writes it to the provided writer
+func (m *Spellchecker) Save(w io.Writer) error {
+	m.mtx.RLock()
+	defer m.mtx.RUnlock()
+
+	//nolint:forcetypeassert
+	data := spellcheckerData{
+		Dict: m.dict,
+	}
+
+	return gob.NewEncoder(w).Encode(data)
+}
+
 // Load reads spellchecker data from the provided reader and decodes it.
 func Load(reader io.Reader) (*Spellchecker, error) {
 	data := spellcheckerData{}
@@ -189,9 +170,7 @@ type searchOptions struct {
 	scoringFunc ScoringFunc
 }
 
-// ScoringFunc compares the source word with a candidate word.
-// It returns the candidate's score and a boolean flag.
-// If the flag is false, the candidate will be completely filtered out.
+// ScoringFunc scores a candidate for the source word. false filters the candidate out.
 type ScoringFunc func(src, candidate []rune, count uint, maxErrors int) (float64, bool)
 
 var defaultScoringFunc ScoringFunc = func(src, candidate []rune, count uint, maxErrors int) (float64, bool) {

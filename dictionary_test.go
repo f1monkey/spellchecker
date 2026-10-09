@@ -126,8 +126,7 @@ func Test_Dictionary_Find(t *testing.T) {
 	t.Run("must stop after the same letter set", func(t *testing.T) {
 		t.Parallel()
 
-		// "oragne" uses the same letters as "orange", so the search returns before
-		// flipping bits. "green" is within two flips and would show up otherwise.
+		// "oragne" has the same letters as "orange", so the search stops before finding "green".
 		dict := mustDictionary(t, "orange", "green")
 
 		require.Equal(t, []Suggestion{{Value: "orange", Score: 1}}, dict.Find("oragne", 5, 2, acceptAll))

@@ -90,8 +90,7 @@ func (d *dictionary) Find(word string, n int, maxErrors int, fn ScoringFunc) []S
 	wordRunes := []rune(word)
 	srcKey := d.alphabet.key(wordRunes, d.zobrist)
 
-	// check for transposition or exact match and do early termination if found
-	// (the most common mistake is a transposition of letters)
+	// Words with the same letters go first: transposition is the most common mistake.
 	d.fillWithCandidates(result, wordRunes, srcKey, maxErrors, fn)
 
 	if result.Len() != 0 {
@@ -115,8 +114,7 @@ func (d *dictionary) addToIndex(id uint32, word []rune) {
 	d.index[key] = append(d.index[key], id)
 }
 
-// computeCandidateKeys collects index keys of letter sets that differ from src
-// by at most maxFlips symbols. Flipping a symbol is a XOR with its Zobrist value.
+// computeCandidateKeys returns index keys of letter sets within maxFlips symbols of src.
 func (d *dictionary) computeCandidateKeys(keys map[uint64]struct{}, src uint64, maxFlips int) {
 	var dfs func(key uint64, level, start int)
 
@@ -161,8 +159,7 @@ func (d *dictionary) fillWithCandidates(result *priorityQueue, wordRunes []rune,
 var _ encoding.BinaryMarshaler = (*dictionary)(nil)
 var _ encoding.BinaryUnmarshaler = (*dictionary)(nil)
 
-// dictData is the serialized form of the dictionary.
-// The index is not stored: it is rebuilt from Words on load.
+// dictData is the serialized dictionary. The index is rebuilt on load.
 type dictData struct {
 	Alphabet alphabet
 	IDs      map[string]uint32

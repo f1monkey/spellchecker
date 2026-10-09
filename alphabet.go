@@ -40,8 +40,7 @@ func newAlphabet(strings ...Alphabet) (alphabet, error) {
 	return result, nil
 }
 
-// zobrist returns a pseudo-random 64-bit value for every alphabet symbol.
-// The values depend only on the symbol position, so they are stable across runs.
+// zobrist returns a stable pseudo-random value for every alphabet symbol.
 func (a alphabet) zobrist() []uint64 {
 	result := make([]uint64, len(a))
 	for i := range result {
@@ -51,8 +50,7 @@ func (a alphabet) zobrist() []uint64 {
 	return result
 }
 
-// key returns the Zobrist hash of the set of alphabet symbols used in the word.
-// Repeated symbols and symbols outside the alphabet do not affect the key.
+// key returns the Zobrist hash of the set of alphabet symbols in the word.
 func (a alphabet) key(word []rune, zobrist []uint64) uint64 {
 	var result uint64
 
@@ -68,17 +66,13 @@ func (a alphabet) key(word []rune, zobrist []uint64) uint64 {
 	return result
 }
 
-// splitmix64 is the SplitMix64 hash (Steele, Lea, Flood, 2014): it maps
-// sequential inputs to well-mixed, independent-looking 64-bit values.
-// Every step is invertible, so distinct inputs always give distinct outputs.
+// splitmix64 is the SplitMix64 hash (Steele, Lea, Flood, 2014).
 func splitmix64(x uint64) uint64 {
 	const (
-		// 2^64 / golden ratio; odd, so the addition is a bijection.
-		// It also keeps splitmix64(0) from being 0.
+		// 2^64 / golden ratio
 		golden = 0x9e3779b97f4a7c15
 
-		// David Stafford's "Mix13" finalizer parameters (a tuned variant of
-		// MurmurHash3 fmix64), chosen empirically for the best avalanche.
+		// Stafford's Mix13 constants
 		mul1   = 0xbf58476d1ce4e5b9
 		mul2   = 0x94d049bb133111eb
 		shift1 = 30

@@ -55,6 +55,92 @@ func Benchmark_Spellchecker_Fix_6_Replacement(b *testing.B) {
 	}
 }
 
+func Benchmark_LayoutFixer_Fix(b *testing.B) {
+	unknown := SuggestionResult{Mistakes: MistakeUnknownWord}
+	results := map[string]SuggestionResult{
+		"ghbdtn":      unknown,
+		"ghbdtnn":     unknown,
+		"руддщбцщкдв": unknown,
+		"qwzx":        unknown,
+		"йцяч":        unknown,
+		"12345":       unknown,
+		"приветт": {
+			Mistakes:    MistakeTypo,
+			Suggestions: []Suggestion{{Value: "привет", Score: 1}},
+		},
+	}
+
+	tests := []struct {
+		name   string
+		phrase string
+	}{
+		{name: "correct", phrase: "hello world привет мир"},
+		{name: "layout", phrase: "ghbdtn"},
+		{name: "layout_split_with_gap", phrase: "руддщбцщкдв"},
+		{name: "layout_and_typo", phrase: "ghbdtnn"},
+		{name: "switched_unknown", phrase: "qwzx"},
+		{name: "unchanged_by_layout", phrase: "12345"},
+		{name: "phrase", phrase: "hello ghbdtn мир руддщбцщкдв 12345 ghbdtnn qwzx"},
+	}
+
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			segments := benchmarkSegments(tt.phrase, results)
+			tokenizer := newTokenizerMock(NewStandardTokenizer(), QwertyRuEn, tt.phrase)
+			f := NewLayoutFixer(QwertyRuEn, &spellcheckerMock{results: results}, tokenizer)
+
+			b.ReportAllocs()
+
+			for b.Loop() {
+				f.Fix(tt.phrase, segments, 5)
+			}
+		})
+	}
+}
+
+// tokenizerMock returns prepared tokens. It copies them, because LayoutFixer modifies tokens.
+type tokenizerMock struct {
+	tokens map[string][]Token
+	buf    []Token
+}
+
+// newTokenizerMock prepares tokens for the words of the phrase in the switched layout.
+func newTokenizerMock(tokenizer Tokenizer, replacer replacer, phrase string) *tokenizerMock {
+	m := &tokenizerMock{tokens: make(map[string][]Token)}
+
+	for word := range strings.FieldsSeq(phrase) {
+		switched := replacer.Replace(word)
+		m.tokens[switched] = tokenizer.Tokenize(switched)
+	}
+
+	return m
+}
+
+func (m *tokenizerMock) Tokenize(input string) []Token {
+	m.buf = append(m.buf[:0], m.tokens[input]...)
+
+	return m.buf
+}
+
+// benchmarkSegments splits the phrase by spaces into segments.
+func benchmarkSegments(phrase string, results map[string]SuggestionResult) []Segment {
+	var segments []Segment //nolint:prealloc
+
+	start := 0
+	for word := range strings.SplitSeq(phrase, " ") {
+		end := start + len(word)
+		segments = append(segments, Segment{
+			Start:       start,
+			End:         end,
+			Suggestions: results[word].Suggestions,
+			Mistakes:    results[word].Mistakes,
+		})
+		start = end + 1
+	}
+
+	return segments
+}
+
 func Benchmark_Norvig1(b *testing.B) {
 	benchmarkNorvig(b, "data/norvig1.txt")
 }
