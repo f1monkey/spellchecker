@@ -3,13 +3,13 @@ package spellchecker
 // priorityQueue keeps the top capacity matches by score.
 // items is a binary min-heap: items[0] has the lowest score.
 type priorityQueue struct {
-	items    []Match
+	items    []Suggestion
 	capacity int
 }
 
 func newPriorityQueue(capacity int) *priorityQueue {
 	return &priorityQueue{
-		items:    make([]Match, 0, capacity),
+		items:    make([]Suggestion, 0, capacity),
 		capacity: capacity,
 	}
 }
@@ -24,7 +24,7 @@ func (pq *priorityQueue) Offer(score float64, word []rune) {
 	}
 
 	if len(pq.items) < pq.capacity {
-		pq.items = append(pq.items, Match{Value: string(word), Score: score})
+		pq.items = append(pq.items, Suggestion{Value: string(word), Score: score})
 		pq.up(len(pq.items) - 1)
 
 		return
@@ -34,13 +34,13 @@ func (pq *priorityQueue) Offer(score float64, word []rune) {
 		return
 	}
 
-	pq.items[0] = Match{Value: string(word), Score: score}
+	pq.items[0] = Suggestion{Value: string(word), Score: score}
 	pq.down(0)
 }
 
 // DrainSorted empties the queue and returns its items sorted by score descending.
-func (pq *priorityQueue) DrainSorted() []Match {
-	out := make([]Match, len(pq.items))
+func (pq *priorityQueue) DrainSorted() []Suggestion {
+	out := make([]Suggestion, len(pq.items))
 
 	for i := len(out) - 1; i >= 0; i-- {
 		last := len(pq.items) - 1

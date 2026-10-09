@@ -64,8 +64,8 @@ func Test_PhraseFixer_Fix(t *testing.T) {
 		{
 			name: "all words are correct",
 			results: map[string]SuggestionResult{
-				"hello": {ExactMatch: true},
-				"world": {ExactMatch: true},
+				"hello": {},
+				"world": {},
 			},
 			phrase: "hello world",
 			want: PhraseFixResult{Segments: []Segment{
@@ -76,25 +76,28 @@ func Test_PhraseFixer_Fix(t *testing.T) {
 		{
 			name: "typo with suggestions",
 			results: map[string]SuggestionResult{
-				"helo":  {Suggestions: []Suggestion{{Value: "hello", Score: 2}, {Value: "help", Score: 1}}},
-				"world": {ExactMatch: true},
+				"helo": {
+					Mistakes:    MistakeTypo,
+					Suggestions: []Suggestion{{Value: "hello", Score: 2}, {Value: "help", Score: 1}},
+				},
+				"world": {},
 			},
 			phrase: "helo world",
 			want: PhraseFixResult{Segments: []Segment{
 				{
-					Start: 0,
-					End:   4,
-					Suggestions: []FixSuggestion{
-						{Value: "hello", Score: 2, Mistakes: MistakeTypo},
-						{Value: "help", Score: 1, Mistakes: MistakeTypo},
-					},
-					Mistakes: MistakeTypo,
+					Start:       0,
+					End:         4,
+					Suggestions: []Suggestion{{Value: "hello", Score: 2}, {Value: "help", Score: 1}},
+					Mistakes:    MistakeTypo,
 				},
 				{Start: 5, End: 10, Mistakes: NoMistake},
 			}},
 		},
 		{
-			name:   "unknown word without suggestions",
+			name: "unknown word without suggestions",
+			results: map[string]SuggestionResult{
+				"qwzx": {Mistakes: MistakeUnknownWord},
+			},
 			phrase: "qwzx",
 			want: PhraseFixResult{Segments: []Segment{
 				{Start: 0, End: 4, Mistakes: MistakeUnknownWord},
@@ -103,8 +106,8 @@ func Test_PhraseFixer_Fix(t *testing.T) {
 		{
 			name: "byte offsets for multibyte text and extra whitespace",
 			results: map[string]SuggestionResult{
-				"привет": {ExactMatch: true},
-				"мир":    {ExactMatch: true},
+				"привет": {},
+				"мир":    {},
 			},
 			phrase: "  привет \t мир ",
 			want: PhraseFixResult{Segments: []Segment{
@@ -267,8 +270,8 @@ func segmentViews(t *testing.T, phrase string, result PhraseFixResult) []segment
 			Text:     phrase[s.Start:s.End],
 			Mistakes: s.Mistakes,
 		}
-		for _, fix := range s.Suggestions {
-			v.Suggestions = append(v.Suggestions, fix.Value)
+		for _, suggestion := range s.Suggestions {
+			v.Suggestions = append(v.Suggestions, suggestion.Value)
 		}
 
 		views = append(views, v)

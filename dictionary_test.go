@@ -130,7 +130,7 @@ func Test_Dictionary_Find(t *testing.T) {
 		// flipping bits. "green" is within two flips and would show up otherwise.
 		dict := mustDictionary(t, "orange", "green")
 
-		require.Equal(t, []Match{{Value: "orange", Score: 1}}, dict.Find("oragne", 5, 2, acceptAll))
+		require.Equal(t, []Suggestion{{Value: "orange", Score: 1}}, dict.Find("oragne", 5, 2, acceptAll))
 	})
 
 	t.Run("must find a word that differs by up to max errors", func(t *testing.T) {
@@ -138,7 +138,7 @@ func Test_Dictionary_Find(t *testing.T) {
 
 		dict := mustDictionary(t, "problem")
 
-		require.Equal(t, []Match{{Value: "problem", Score: 1}}, dict.Find("problam", 5, 2, acceptAll))
+		require.Equal(t, []Suggestion{{Value: "problem", Score: 1}}, dict.Find("problam", 5, 2, acceptAll))
 		require.Empty(t, dict.Find("problam", 5, 1, acceptAll))
 	})
 
@@ -151,7 +151,7 @@ func Test_Dictionary_Find(t *testing.T) {
 		dict.Add("ab", 1)
 		dict.Add("ba", 3)
 
-		require.Equal(t, []Match{{Value: "ba", Score: 3}}, dict.Find("ab", 1, 2, acceptAll))
+		require.Equal(t, []Suggestion{{Value: "ba", Score: 3}}, dict.Find("ab", 1, 2, acceptAll))
 	})
 
 	t.Run("must skip candidates rejected by the filter", func(t *testing.T) {

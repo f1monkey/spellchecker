@@ -122,7 +122,7 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 				if i == 0 {
 					total++
 
-					if result.ExactMatch && word == item.expected {
+					if result.Mistakes == NoMistake && word == item.expected {
 						ok++
 						continue
 					}

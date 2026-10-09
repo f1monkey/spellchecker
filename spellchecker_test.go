@@ -138,6 +138,7 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 		s := newSampleSpellchecker(t)
 		result := s.Suggest("arang", 5)
 		require.Equal(t, SuggestionResult{
+			Mistakes: MistakeTypo,
 			Suggestions: []Suggestion{
 				{Value: "orange", Score: 0.2772588722239781},
 				{Value: "range", Score: 0.13862943611198905},
@@ -151,6 +152,7 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 		s := newSampleSpellchecker(t)
 		result := s.Suggest("rang", 5, WithMaxErrors(1))
 		require.Equal(t, SuggestionResult{
+			Mistakes: MistakeTypo,
 			Suggestions: []Suggestion{
 				{Value: "range", Score: 1.7545288007923614},
 			},
@@ -158,6 +160,7 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 
 		result = s.Suggest("arang", 5, WithMaxErrors(2))
 		require.Equal(t, SuggestionResult{
+			Mistakes: MistakeTypo,
 			Suggestions: []Suggestion{
 				{Value: "orange", Score: 0.2772588722239781},
 				{Value: "range", Score: 0.13862943611198905},
@@ -170,7 +173,7 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 
 		s := newSampleSpellchecker(t)
 		result := s.Suggest("orange", 5)
-		require.Equal(t, SuggestionResult{ExactMatch: true}, result)
+		require.Equal(t, SuggestionResult{Mistakes: NoMistake}, result)
 	})
 
 	t.Run("unknown word", func(t *testing.T) {
@@ -178,6 +181,6 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 
 		s := newSampleSpellchecker(t)
 		result := s.Suggest("qwerty", 5)
-		require.Equal(t, SuggestionResult{Suggestions: []Suggestion{}}, result)
+		require.Equal(t, SuggestionResult{Mistakes: MistakeUnknownWord}, result)
 	})
 }

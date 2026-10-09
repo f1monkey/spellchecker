@@ -9,13 +9,27 @@ import (
 
 const defaultMaxErrors = 2
 
-type dict interface {
-	ID(word string) uint32
-	Has(word string) bool
-	Inc(id uint32, n uint)
-	Add(word string, n uint) uint32
-	Find(word string, n int, maxErrors int, fn ScoringFunc) []Match
-}
+// Mistake is a bit set of mistakes found in a segment or fixed by a suggestion.
+// A single segment may contain several mistakes at once,
+// e.g. a wrong keyboard layout and a typo.
+type Mistake int
+
+// NoMistake means the segment is correct.
+const NoMistake Mistake = 0
+
+const (
+	// MistakeTypo is a misspelled word (insertion, deletion, substitution or transposition).
+	MistakeTypo Mistake = 1 << iota
+	// MistakeUnknownWord is a word that is not in the dictionary and has no fix suggestions.
+	// It is never set together with other mistakes.
+	MistakeUnknownWord
+	// MistakeLayout is a word typed in a wrong keyboard layout, e.g. "ghbdtn" instead of "привет".
+	MistakeLayout
+)
+
+// Has reports whether m contains any of the mistakes in x.
+// Has(NoMistake) is always false; compare with NoMistake to check for a correct segment.
+func (m Mistake) Has(x Mistake) bool { return m&x != 0 }
 
 type OptionFunc func(opts *searchOptions)
 
@@ -44,7 +58,7 @@ func WithScoringFunc(f ScoringFunc) OptionFunc {
 type Spellchecker struct {
 	mtx sync.RWMutex
 
-	dict dict
+	dict *dictionary
 }
 
 // New creates a spellchecker with the given tokenizer and alphabets.
@@ -111,16 +125,18 @@ func (m *Spellchecker) Save(w io.Writer) error {
 
 	//nolint:forcetypeassert
 	data := spellcheckerData{
-		Dict: m.dict.(*dictionary),
+		Dict: m.dict,
 	}
 
 	return gob.NewEncoder(w).Encode(data)
 }
 
-type Suggestion = Match
-
+// SuggestionResult is a group of fix candidates for a word that fix the same mistakes.
 type SuggestionResult struct {
-	ExactMatch  bool // if true, the word is correct
+	// Mistakes is a set of mistakes fixed by Matches.
+	// NoMistake if the word is correct, MistakeUnknownWord if there are no Matches.
+	Mistakes Mistake
+	// Suggestions are fix candidates ordered from best to worst. Empty for correct and unknown words.
 	Suggestions []Suggestion
 }
 
@@ -131,7 +147,7 @@ func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) Suggestio
 	defer s.mtx.RUnlock()
 
 	if s.dict.Has(word) {
-		return SuggestionResult{ExactMatch: true}
+		return SuggestionResult{}
 	}
 
 	searchOpts := searchOptions{maxErrors: defaultMaxErrors, scoringFunc: defaultScoringFunc}
@@ -143,8 +159,14 @@ func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) Suggestio
 		searchOpts.scoringFunc = defaultScoringFunc
 	}
 
+	matches := s.dict.Find(word, n, searchOpts.maxErrors, searchOpts.scoringFunc)
+	if len(matches) == 0 {
+		return SuggestionResult{Mistakes: MistakeUnknownWord}
+	}
+
 	return SuggestionResult{
-		Suggestions: s.dict.Find(word, n, searchOpts.maxErrors, searchOpts.scoringFunc),
+		Mistakes:    MistakeTypo,
+		Suggestions: matches,
 	}
 }
 

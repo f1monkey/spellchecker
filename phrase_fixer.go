@@ -5,26 +5,6 @@ type suggester interface {
 	AddWeight(weight uint, words ...string)
 }
 
-// Mistake is a bit set of mistakes found in a segment or fixed by a suggestion.
-// A single segment may contain several mistakes at once,
-// e.g. a wrong keyboard layout and a typo.
-type Mistake int
-
-// NoMistake means the segment is correct.
-const NoMistake Mistake = 0
-
-const (
-	// MistakeTypo is a misspelled word (insertion, deletion, substitution or transposition).
-	MistakeTypo Mistake = 1 << iota
-	// MistakeUnknownWord is a word that is not in the dictionary and has no fix suggestions.
-	// It is never set together with other mistakes.
-	MistakeUnknownWord
-)
-
-// Has reports whether m contains any of the mistakes in x.
-// Has(NoMistake) is always false; compare with NoMistake to check for a correct segment.
-func (m Mistake) Has(x Mistake) bool { return m&x != 0 }
-
 // Segment is a part of the input phrase: either a correct word or a fragment that needs fixing.
 // Start and End are byte offsets in the input phrase, End is exclusive,
 // so phrase[Start:End] is the segment text.
@@ -33,17 +13,10 @@ func (m Mistake) Has(x Mistake) bool { return m&x != 0 }
 type Segment struct {
 	Start int
 	End   int
-	// Suggestions are fix candidates ordered from best to worst. Empty for correct segments.
-	Suggestions []FixSuggestion
-	// Mistakes is a union of Mistakes of all Suggestions, or MistakeUnknownWord if there are none.
+	// Suggestions are fix candidates ordered from best to worst. Empty for correct and unknown segments.
+	Suggestions []Suggestion
+	// Mistakes is a set of mistakes fixed by Suggestions, or MistakeUnknownWord if there are none.
 	// NoMistake for correct segments.
-	Mistakes Mistake
-}
-
-// FixSuggestion is a fix candidate for a segment.
-type FixSuggestion struct {
-	Suggestion
-	// Mistakes is a set of mistakes fixed by this suggestion.
 	Mistakes Mistake
 }
 
@@ -98,29 +71,13 @@ func (f *PhraseFixer) Fix(phrase string, n int, opts ...OptionFunc) PhraseFixRes
 	segments := make([]Segment, 0, len(tokens))
 
 	for _, token := range tokens {
-		suggestions := f.spellchecker.Suggest(token.Text, n, opts...)
+		suggestionResult := f.spellchecker.Suggest(token.Text, n, opts...)
 
 		segment := Segment{
-			Start:    token.Start,
-			End:      token.End,
-			Mistakes: NoMistake,
-		}
-
-		if !suggestions.ExactMatch {
-			if len(suggestions.Suggestions) > 0 {
-				fixes := make([]FixSuggestion, 0, len(suggestions.Suggestions))
-				for _, s := range suggestions.Suggestions {
-					fixes = append(fixes, FixSuggestion{
-						Mistakes:   MistakeTypo,
-						Suggestion: s,
-					})
-				}
-
-				segment.Suggestions = fixes
-				segment.Mistakes = fixes[0].Mistakes
-			} else {
-				segment.Mistakes = MistakeUnknownWord
-			}
+			Start:       token.Start,
+			End:         token.End,
+			Suggestions: suggestionResult.Suggestions,
+			Mistakes:    suggestionResult.Mistakes,
 		}
 
 		segments = append(segments, segment)

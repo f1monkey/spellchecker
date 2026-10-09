@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 )
 
-type Match struct {
+type Suggestion struct {
 	Value string
 	Score float64
 }
@@ -80,7 +80,7 @@ func (d *dictionary) Inc(id uint32, n uint) {
 	d.counts[id] += n
 }
 
-func (d *dictionary) Find(word string, n int, maxErrors int, fn ScoringFunc) []Match {
+func (d *dictionary) Find(word string, n int, maxErrors int, fn ScoringFunc) []Suggestion {
 	if maxErrors <= 0 {
 		return nil
 	}
