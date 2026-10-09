@@ -5,7 +5,6 @@ import (
 	"path"
 	"testing"
 
-	"github.com/f1monkey/spellchecker/v4/internal/alphabet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,7 +12,7 @@ import (
 func Test_NewSpellchecker(t *testing.T) {
 	t.Parallel()
 
-	s, err := New(alphabet.EN)
+	s, err := New(EN)
 	require.NoError(t, err)
 	require.NotNil(t, s.dict)
 }
@@ -105,7 +104,7 @@ func Test_Spellchecker_Save(t *testing.T) {
 
 	m1 := newSampleSpellchecker(t)
 
-	filePath := path.Join(t.TempDir(), "spellchecker.bin")
+	filePath := path.Join(t.TempDir(), "bin")
 	file, err := os.Create(filePath)
 	require.NoError(t, err)
 	err = m1.Save(file)

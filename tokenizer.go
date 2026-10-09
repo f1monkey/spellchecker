@@ -1,6 +1,8 @@
 package spellchecker
 
-import "regexp"
+import (
+	"regexp"
+)
 
 // Token is a fragment of the tokenized input.
 // Start and End are byte offsets in the input, End is exclusive,
@@ -16,14 +18,14 @@ type Tokenizer interface {
 }
 
 // NewWhitespaceTokenizer splits on Unicode whitespace, like Elasticsearch whitespace tokenizer.
-func NewWhitespaceTokenizer() *RegexpTokenizer {
+func NewWhitespaceTokenizer() Tokenizer {
 	return NewRegexpTokenizer(regexp.MustCompile(`\S+`))
 }
 
 // NewStandardTokenizer approximates Elasticsearch standard tokenizer (UAX #29):
 // keeps letters, digits, underscores and in-word apostrophes; splits on hyphens
 // and other punctuation.
-func NewStandardTokenizer() *RegexpTokenizer {
+func NewStandardTokenizer() Tokenizer {
 	return NewRegexpTokenizer(regexp.MustCompile(`[\p{L}\p{N}_'’]+`))
 }
 

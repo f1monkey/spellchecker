@@ -1,6 +1,6 @@
 package spellchecker
 
-type spellchecker interface {
+type suggester interface {
 	Suggest(word string, n int, opts ...OptionFunc) SuggestionResult
 	AddWeight(weight uint, words ...string)
 }
@@ -57,13 +57,13 @@ type PhraseFixResult struct {
 // missing and extra spaces and wrong keyboard layout.
 // It uses Spellchecker to look up and fix individual words.
 type PhraseFixer struct {
-	spellchecker spellchecker
+	spellchecker suggester
 	tokenizer    Tokenizer
 }
 
 // NewPhraseFixer creates a PhraseFixer that uses the given spellchecker for word lookup.
 func NewPhraseFixer(
-	spellchecker spellchecker,
+	spellchecker suggester,
 	tokenizer Tokenizer,
 ) *PhraseFixer {
 	return &PhraseFixer{

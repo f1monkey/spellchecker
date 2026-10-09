@@ -5,10 +5,6 @@ import (
 	"io"
 	"math"
 	"sync"
-
-	"github.com/f1monkey/spellchecker/v4/internal/alphabet"
-	"github.com/f1monkey/spellchecker/v4/internal/dictionary"
-	"github.com/f1monkey/spellchecker/v4/internal/levenshtein"
 )
 
 const defaultMaxErrors = 2
@@ -18,7 +14,7 @@ type dict interface {
 	Has(word string) bool
 	Inc(id uint32, n uint)
 	Add(word string, n uint) uint32
-	Find(word string, n int, maxErrors int, fn ScoringFunc) []dictionary.Match
+	Find(word string, n int, maxErrors int, fn ScoringFunc) []Match
 }
 
 type OptionFunc func(opts *searchOptions)
@@ -45,14 +41,6 @@ func WithScoringFunc(f ScoringFunc) OptionFunc {
 	}
 }
 
-type Alphabet = alphabet.Letters
-
-const (
-	EN      Alphabet = alphabet.EN
-	RU      Alphabet = alphabet.RU
-	Numbers Alphabet = alphabet.Numbers
-)
-
 type Spellchecker struct {
 	mtx sync.RWMutex
 
@@ -64,7 +52,7 @@ type Spellchecker struct {
 // characters are ignored. Pass one or more constants such as EN, RU, Numbers,
 // or any custom string.
 func New(alphabets ...Alphabet) (*Spellchecker, error) {
-	dict, err := dictionary.New(alphabets...)
+	dict, err := newDictionary(alphabets...)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +101,7 @@ func (s *Spellchecker) AddWeight(weight uint, words ...string) {
 }
 
 type spellcheckerData struct {
-	Dict *dictionary.Dictionary
+	Dict *dictionary
 }
 
 // Save encodes spellchecker data and writes it to the provided writer
@@ -123,13 +111,13 @@ func (m *Spellchecker) Save(w io.Writer) error {
 
 	//nolint:forcetypeassert
 	data := spellcheckerData{
-		Dict: m.dict.(*dictionary.Dictionary),
+		Dict: m.dict.(*dictionary),
 	}
 
 	return gob.NewEncoder(w).Encode(data)
 }
 
-type Suggestion = dictionary.Match
+type Suggestion = Match
 
 type SuggestionResult struct {
 	ExactMatch  bool // if true, the word is correct
@@ -182,12 +170,12 @@ type searchOptions struct {
 // ScoringFunc compares the source word with a candidate word.
 // It returns the candidate's score and a boolean flag.
 // If the flag is false, the candidate will be completely filtered out.
-type ScoringFunc = dictionary.ScoringFunc
+type ScoringFunc func(src, candidate []rune, count uint, maxErrors int) (float64, bool)
 
 var defaultScoringFunc ScoringFunc = func(src, candidate []rune, count uint, maxErrors int) (float64, bool) {
 	const prefixCoefficitent = 1.5
 
-	distance, prefixLen, suffixLen := levenshtein.Levenshtein(src, candidate, maxErrors)
+	distance, prefixLen, suffixLen := levenshtein(src, candidate, maxErrors)
 	if distance > maxErrors {
 		return 0, false
 	}
