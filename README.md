@@ -30,31 +30,18 @@ go get -v github.com/f1monkey/spellchecker/v4
 
 ### Quick start
 
-1. Initialize the spellchecker. Pass a tokenizer and one or more alphabets: sets of allowed characters used for indexing and lookup. Characters outside the alphabet are ignored for these operations.
+1. Initialize the spellchecker. Pass one or more alphabets: sets of allowed characters used for indexing and lookup. Characters outside the alphabet are ignored for these operations.
 
 ```go
 	sc, err := spellchecker.New(
-		spellchecker.NewWhitespaceTokenizer(), // or NewStandardTokenizer()/NewRegexpTokenizer()
 		spellchecker.EN, spellchecker.Numbers, // or a custom string like "abcdefghijklmnopqrstuvwxyz1234567890"
 	)
 ```
 
-`NewWhitespaceTokenizer` splits on Unicode whitespace (like Elasticsearch `whitespace`).
-`NewStandardTokenizer` approximates Elasticsearch `standard`: it keeps letters, digits, underscores and in-word apostrophes, and splits on hyphens and other punctuation. You can also implement `Tokenizer` inteface or use `NewRegexpTokenizer`.
-
 2. Add words to the dictionary:
-   1. Whole words (no splitting):
-
    ```go
    	sc.Add("lock", "stock", "barrels")
    	sc.AddWeight(5, "hello", "world") // higher weight ranks the word higher in suggestions
-   ```
-
-   2. Phrases — tokenized with the tokenizer from `New`:
-
-   ```go
-   	sc.AddPhrases("lock stock and two smoking barrels")
-   	sc.AddPhraseWeight(10, "very common phrase")
    ```
 
 3. Use the spellchecker:
@@ -116,7 +103,6 @@ result := sc.Suggest(
 ### Save/load
 
 ```go
-	tok := spellchecker.NewWhitespaceTokenizer()
 	sc, err := spellchecker.New(tok, "abc")
 
 	// Save data to any io.Writer
@@ -126,16 +112,23 @@ result := sc.Suggest(
 	}
 	sc.Save(out)
 
-	// Load data back from io.Reader (pass a tokenizer for AddPhrases after load)
+	// Load data back from io.Reader
 	in, err := os.Open("data/out.bin")
 	if err != nil {
 		panic(err)
 	}
-	sc, err = spellchecker.Load(in, tok)
+	sc, err = spellchecker.Load(in)
 	if err != nil {
 		panic(err)
 	}
 ```
+
+## Tokenizers
+
+- `NewWhitespaceTokenizer` splits on Unicode whitespace (like Elasticsearch `whitespace`).
+- `NewStandardTokenizer` approximates Elasticsearch `standard`: it keeps letters, digits, underscores and in-word apostrophes, and splits on hyphens and other punctuation.
+- `NewRegexpTokenizer` - splits strings using the provided regular expression
+- You can also implement `Tokenizer` inteface
 
 ## Benchmarks
 

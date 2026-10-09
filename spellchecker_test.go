@@ -13,7 +13,7 @@ import (
 func Test_NewSpellchecker(t *testing.T) {
 	t.Parallel()
 
-	s, err := New(&tokenizerMock{}, alphabet.EN)
+	s, err := New(alphabet.EN)
 	require.NoError(t, err)
 	require.NotNil(t, s.dict)
 }
@@ -33,7 +33,7 @@ func Test_Spellchecker_Add(t *testing.T) {
 	t.Run("adds each argument as a whole word", func(t *testing.T) {
 		t.Parallel()
 
-		s, err := New(NewWhitespaceTokenizer(), EN)
+		s, err := New(EN)
 		require.NoError(t, err)
 
 		s.Add("hello world", "foo")
@@ -46,7 +46,7 @@ func Test_Spellchecker_Add(t *testing.T) {
 	t.Run("skips empty strings", func(t *testing.T) {
 		t.Parallel()
 
-		s, err := New(NewWhitespaceTokenizer(), EN)
+		s, err := New(EN)
 		require.NoError(t, err)
 
 		s.Add("", "bar", "")
@@ -62,7 +62,7 @@ func Test_Spellchecker_AddWeight(t *testing.T) {
 	t.Run("increments count for an existing word", func(t *testing.T) {
 		t.Parallel()
 
-		s, err := New(NewWhitespaceTokenizer(), EN)
+		s, err := New(EN)
 		require.NoError(t, err)
 
 		// "ban" and "bin" are the same edit away from "ben", so the higher weight must rank first.
@@ -77,7 +77,7 @@ func Test_Spellchecker_AddWeight(t *testing.T) {
 	t.Run("adds remaining words if an earlier one already exists", func(t *testing.T) {
 		t.Parallel()
 
-		s, err := New(NewWhitespaceTokenizer(), EN)
+		s, err := New(EN)
 		require.NoError(t, err)
 
 		s.Add("ban")
@@ -100,42 +100,6 @@ func suggestionValues(result SuggestionResult) []string {
 	return values
 }
 
-func Test_Spellchecker_AddPhrases(t *testing.T) {
-	t.Parallel()
-
-	t.Run("tokenizes phrases before adding", func(t *testing.T) {
-		t.Parallel()
-
-		s, err := New(NewWhitespaceTokenizer(), EN)
-		require.NoError(t, err)
-
-		s.AddPhrases("green tea", "black coffee")
-
-		require.True(t, s.IsCorrect("green"))
-		require.True(t, s.IsCorrect("tea"))
-		require.True(t, s.IsCorrect("black"))
-		require.True(t, s.IsCorrect("coffee"))
-		require.False(t, s.IsCorrect("green tea"))
-	})
-
-	t.Run("applies weight to every token", func(t *testing.T) {
-		t.Parallel()
-
-		s, err := New(NewStandardTokenizer(), EN)
-		require.NoError(t, err)
-
-		s.AddPhraseWeight(4, "dog's bone")
-		s.AddWeight(1, "dig's")
-
-		require.True(t, s.IsCorrect("dog's"))
-		require.True(t, s.IsCorrect("bone"))
-
-		// "dog's" was added with a higher weight than "dig's", and both are one edit from "dug's".
-		result := s.Suggest("dug's", 2)
-		require.Equal(t, []string{"dog's", "dig's"}, suggestionValues(result))
-	})
-}
-
 func Test_Spellchecker_Save(t *testing.T) {
 	t.Parallel()
 
@@ -152,7 +116,7 @@ func Test_Spellchecker_Save(t *testing.T) {
 	file, err = os.Open(filePath)
 	require.NoError(t, err)
 
-	m2, err := Load(file, NewWhitespaceTokenizer())
+	m2, err := Load(file)
 	require.NoError(t, err)
 
 	require.Equal(t, m1.dict.ID("green"), m2.dict.ID("green"))
@@ -166,8 +130,55 @@ func Test_Spellchecker_Save(t *testing.T) {
 	require.Equal(t, m1.Suggest("arang", 5), m2.Suggest("arang", 5))
 }
 
-type tokenizerMock struct{}
+func Test_Spellchecker_Suggest(t *testing.T) {
+	t.Parallel()
 
-func (m *tokenizerMock) Tokenize(input string) []string {
-	return []string{input}
+	t.Run("fix", func(t *testing.T) {
+		t.Parallel()
+
+		s := newSampleSpellchecker(t)
+		result := s.Suggest("arang", 5)
+		require.Equal(t, SuggestionResult{
+			Suggestions: []Suggestion{
+				{Value: "orange", Score: 0.2772588722239781},
+				{Value: "range", Score: 0.13862943611198905},
+			},
+		}, result)
+	})
+
+	t.Run("custom max errors", func(t *testing.T) {
+		t.Parallel()
+
+		s := newSampleSpellchecker(t)
+		result := s.Suggest("rang", 5, WithMaxErrors(1))
+		require.Equal(t, SuggestionResult{
+			Suggestions: []Suggestion{
+				{Value: "range", Score: 1.7545288007923614},
+			},
+		}, result)
+
+		result = s.Suggest("arang", 5, WithMaxErrors(2))
+		require.Equal(t, SuggestionResult{
+			Suggestions: []Suggestion{
+				{Value: "orange", Score: 0.2772588722239781},
+				{Value: "range", Score: 0.13862943611198905},
+			},
+		}, result)
+	})
+
+	t.Run("valid word", func(t *testing.T) {
+		t.Parallel()
+
+		s := newSampleSpellchecker(t)
+		result := s.Suggest("orange", 5)
+		require.Equal(t, SuggestionResult{ExactMatch: true}, result)
+	})
+
+	t.Run("unknown word", func(t *testing.T) {
+		t.Parallel()
+
+		s := newSampleSpellchecker(t)
+		result := s.Suggest("qwerty", 5)
+		require.Equal(t, SuggestionResult{Suggestions: []Suggestion{}}, result)
+	})
 }
