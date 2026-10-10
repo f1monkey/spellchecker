@@ -12,39 +12,49 @@ func Test_NewPhraseFixer(t *testing.T) {
 	sc := &spellcheckerMock{}
 	tok := NewWhitespaceTokenizer()
 	lf := NewLayoutFixer(QwertyRuEn, sc, tok)
+	other := &segmentFixerMock{}
 
-	f := NewPhraseFixer(sc, tok, lf)
+	f := NewPhraseFixer(sc, tok, lf, other)
 	require.Same(t, sc, f.spellchecker)
 	require.Same(t, tok, f.tokenizer)
-	require.Same(t, lf, f.fixer)
+	require.Len(t, f.fixers, 2)
+	require.Same(t, lf, f.fixers[0])
+	require.Same(t, other, f.fixers[1])
+
+	require.Nil(t, NewPhraseFixer(sc, tok).fixers)
 }
 
-func Test_PhraseFixer_Fix_Fixer(t *testing.T) {
+func Test_PhraseFixer_Fix_Fixers(t *testing.T) {
 	t.Parallel()
 
-	sc := &spellcheckerMock{results: map[string]SuggestionResult{"helo": {Mistakes: MistakeTypo}}}
-	fixer := &segmentFixerMock{results: map[string][]Segment{
-		"hello world": {{Start: 0, End: 11, Mistakes: MistakeLayout}},
-	}}
-	f := NewPhraseFixer(sc, NewWhitespaceTokenizer(), fixer)
+	segments := []Segment{
+		{Start: 0, End: 4, Mistakes: MistakeTypo},
+		{Start: 5, End: 10, Mistakes: NoMistake},
+	}
+	first := Segment{Start: 0, End: 10, Mistakes: MistakeLayout}
+	second := Segment{Start: 5, End: 10, Mistakes: MistakeUnknownWord}
 
 	tests := []struct {
 		name   string
-		phrase string
+		fixers []SegmentFixer
 		want   []Segment
 	}{
 		{
-			name:   "segments are passed to the fixer",
-			phrase: "helo world",
-			want: []Segment{
-				{Start: 0, End: 4, Mistakes: MistakeTypo},
-				{Start: 5, End: 10, Mistakes: NoMistake},
-			},
+			name: "no fixers",
+			want: segments,
 		},
 		{
-			name:   "fixer result is returned",
-			phrase: "hello world",
-			want:   []Segment{{Start: 0, End: 11, Mistakes: MistakeLayout}},
+			name:   "one fixer",
+			fixers: []SegmentFixer{&segmentFixerMock{add: []Segment{first}}},
+			want:   append(append([]Segment{}, segments...), first),
+		},
+		{
+			name: "fixers are chained in order",
+			fixers: []SegmentFixer{
+				&segmentFixerMock{add: []Segment{first}},
+				&segmentFixerMock{add: []Segment{second}},
+			},
+			want: append(append([]Segment{}, segments...), first, second),
 		},
 	}
 
@@ -52,7 +62,10 @@ func Test_PhraseFixer_Fix_Fixer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			require.Equal(t, PhraseFixResult{Segments: tt.want}, f.Fix(tt.phrase, 3))
+			sc := &spellcheckerMock{results: map[string]SuggestionResult{"helo": {Mistakes: MistakeTypo}}}
+			f := NewPhraseFixer(sc, NewWhitespaceTokenizer(), tt.fixers...)
+
+			require.Equal(t, PhraseFixResult{Segments: tt.want}, f.Fix("helo world", 3))
 		})
 	}
 }
@@ -61,7 +74,7 @@ func Test_PhraseFixer_AddPhrases(t *testing.T) {
 	t.Parallel()
 
 	sc := &spellcheckerMock{}
-	f := NewPhraseFixer(sc, NewStandardTokenizer(), nil)
+	f := NewPhraseFixer(sc, NewStandardTokenizer())
 
 	f.AddPhrases("hello, world", "", "папа-кот", "hello")
 
@@ -77,7 +90,7 @@ func Test_PhraseFixer_AddPhraseWeight(t *testing.T) {
 	t.Parallel()
 
 	sc := &spellcheckerMock{}
-	f := NewPhraseFixer(sc, NewWhitespaceTokenizer(), nil)
+	f := NewPhraseFixer(sc, NewWhitespaceTokenizer())
 
 	f.AddPhraseWeight(5, "foo bar")
 
@@ -161,7 +174,7 @@ func Test_PhraseFixer_Fix(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			f := NewPhraseFixer(&spellcheckerMock{results: tt.results}, NewWhitespaceTokenizer(), nil)
+			f := NewPhraseFixer(&spellcheckerMock{results: tt.results}, NewWhitespaceTokenizer())
 
 			got := f.Fix(tt.phrase, 3)
 			require.Equal(t, tt.want, got)
@@ -267,7 +280,7 @@ func Test_PhraseFixer_Fix_Integration(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			f := NewPhraseFixer(newSampleSpellchecker(t), tt.tokenizer, nil)
+			f := NewPhraseFixer(newSampleSpellchecker(t), tt.tokenizer)
 
 			got := f.Fix(tt.phrase, tt.n, tt.opts...)
 			require.Equal(t, tt.want, segmentViews(t, tt.phrase, got))
@@ -294,17 +307,13 @@ func (m *spellcheckerMock) AddWeight(weight uint, words ...string) {
 	}
 }
 
-// segmentFixerMock returns segments as is for unknown phrases.
+// segmentFixerMock appends its segments to the given ones.
 type segmentFixerMock struct {
-	results map[string][]Segment
+	add []Segment
 }
 
-func (m *segmentFixerMock) Fix(phrase string, segments []Segment, _ int, _ ...OptionFunc) []Segment {
-	if result, ok := m.results[phrase]; ok {
-		return result
-	}
-
-	return segments
+func (m *segmentFixerMock) Fix(_ string, segments []Segment, _ int, _ ...OptionFunc) []Segment {
+	return append(segments, m.add...)
 }
 
 // segmentView is a Segment with its text and suggestion values instead of offsets and scores.

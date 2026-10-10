@@ -22,8 +22,8 @@ type PhraseFixResult struct {
 	Segments []Segment
 }
 
-// segmentFixer fixes segments of the phrase found by PhraseFixer.
-type segmentFixer interface {
+// SegmentFixer fixes segments of the phrase found by PhraseFixer.
+type SegmentFixer interface {
 	Fix(phrase string, segments []Segment, n int, opts ...OptionFunc) []Segment
 }
 
@@ -31,19 +31,19 @@ type segmentFixer interface {
 type PhraseFixer struct {
 	spellchecker suggester
 	tokenizer    Tokenizer
-	fixer        segmentFixer
+	fixers       []SegmentFixer
 }
 
-// NewPhraseFixer creates a PhraseFixer. fixer may be nil.
+// NewPhraseFixer creates a PhraseFixer. Fixers are applied in the given order.
 func NewPhraseFixer(
 	spellchecker suggester,
 	tokenizer Tokenizer,
-	fixer segmentFixer,
+	fixers ...SegmentFixer,
 ) *PhraseFixer {
 	return &PhraseFixer{
 		spellchecker: spellchecker,
 		tokenizer:    tokenizer,
-		fixer:        fixer,
+		fixers:       fixers,
 	}
 }
 
@@ -61,7 +61,7 @@ func (f *PhraseFixer) AddPhraseWeight(weight uint, phrases ...string) {
 	}
 }
 
-// Fix splits the phrase into segments, finds mistakes in them and passes them to the fixer.
+// Fix splits the phrase into segments, finds mistakes in them and passes them through the fixers.
 func (f *PhraseFixer) Fix(phrase string, n int, opts ...OptionFunc) PhraseFixResult {
 	tokens := f.tokenizer.Tokenize(phrase)
 	if len(tokens) == 0 {
@@ -81,8 +81,8 @@ func (f *PhraseFixer) Fix(phrase string, n int, opts ...OptionFunc) PhraseFixRes
 		})
 	}
 
-	if f.fixer != nil {
-		segments = f.fixer.Fix(phrase, segments, n, opts...)
+	for _, fixer := range f.fixers {
+		segments = fixer.Fix(phrase, segments, n, opts...)
 	}
 
 	return PhraseFixResult{
