@@ -11,20 +11,20 @@ func Test_NewPhraseFixer(t *testing.T) {
 
 	sc := &spellcheckerMock{}
 	tok := NewWhitespaceTokenizer()
-	lf := NewLayoutFixer(QwertyRuEn, sc, tok)
-	other := &segmentFixerMock{}
+	lf := NewLayoutCorrector(QwertyRuEn, sc, tok)
+	other := &correctorMock{}
 
 	f := NewPhraseFixer(sc, tok, lf, other)
 	require.Same(t, sc, f.spellchecker)
 	require.Same(t, tok, f.tokenizer)
-	require.Len(t, f.fixers, 2)
-	require.Same(t, lf, f.fixers[0])
-	require.Same(t, other, f.fixers[1])
+	require.Len(t, f.correctors, 2)
+	require.Same(t, lf, f.correctors[0])
+	require.Same(t, other, f.correctors[1])
 
-	require.Nil(t, NewPhraseFixer(sc, tok).fixers)
+	require.Nil(t, NewPhraseFixer(sc, tok).correctors)
 }
 
-func Test_PhraseFixer_Fix_Fixers(t *testing.T) {
+func Test_PhraseFixer_Fix_Correctors(t *testing.T) {
 	t.Parallel()
 
 	segments := []Segment{
@@ -35,24 +35,24 @@ func Test_PhraseFixer_Fix_Fixers(t *testing.T) {
 	second := Segment{Start: 5, End: 10, Mistakes: MistakeUnknownWord}
 
 	tests := []struct {
-		name   string
-		fixers []SegmentFixer
-		want   []Segment
+		name       string
+		correctors []Corrector
+		want       []Segment
 	}{
 		{
-			name: "no fixers",
+			name: "no correctors",
 			want: segments,
 		},
 		{
-			name:   "one fixer",
-			fixers: []SegmentFixer{&segmentFixerMock{add: []Segment{first}}},
-			want:   append(append([]Segment{}, segments...), first),
+			name:       "one corrector",
+			correctors: []Corrector{&correctorMock{add: []Segment{first}}},
+			want:       append(append([]Segment{}, segments...), first),
 		},
 		{
-			name: "fixers are chained in order",
-			fixers: []SegmentFixer{
-				&segmentFixerMock{add: []Segment{first}},
-				&segmentFixerMock{add: []Segment{second}},
+			name: "correctors are chained in order",
+			correctors: []Corrector{
+				&correctorMock{add: []Segment{first}},
+				&correctorMock{add: []Segment{second}},
 			},
 			want: append(append([]Segment{}, segments...), first, second),
 		},
@@ -63,7 +63,7 @@ func Test_PhraseFixer_Fix_Fixers(t *testing.T) {
 			t.Parallel()
 
 			sc := &spellcheckerMock{results: map[string]SuggestionResult{"helo": {Mistakes: MistakeTypo}}}
-			f := NewPhraseFixer(sc, NewWhitespaceTokenizer(), tt.fixers...)
+			f := NewPhraseFixer(sc, NewWhitespaceTokenizer(), tt.correctors...)
 
 			require.Equal(t, PhraseFixResult{Segments: tt.want}, f.Fix("helo world", 3))
 		})
@@ -307,12 +307,12 @@ func (m *spellcheckerMock) AddWeight(weight uint, words ...string) {
 	}
 }
 
-// segmentFixerMock appends its segments to the given ones.
-type segmentFixerMock struct {
+// correctorMock appends its segments to the given ones.
+type correctorMock struct {
 	add []Segment
 }
 
-func (m *segmentFixerMock) Fix(_ string, segments []Segment, _ int, _ ...OptionFunc) []Segment {
+func (m *correctorMock) Correct(_ string, segments []Segment, _ int, _ ...OptionFunc) []Segment {
 	return append(segments, m.add...)
 }
 

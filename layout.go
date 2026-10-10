@@ -42,18 +42,18 @@ type replacer interface {
 	Replace(s string) string
 }
 
-// LayoutFixer fixes words typed in a wrong keyboard layout.
-type LayoutFixer struct {
+// LayoutCorrector corrects words typed in a wrong keyboard layout.
+type LayoutCorrector struct {
 	replacer            replacer
 	suggester           suggester
 	tokenizer           Tokenizer
 	whitespaceTokenizer Tokenizer
 }
 
-// NewLayoutFixer creates a LayoutFixer. The replacer must map each rune to one rune.
+// NewLayoutCorrector creates a LayoutCorrector. The replacer must map each rune to one rune.
 // The tokenizer must be the same as in PhraseFixer.
-func NewLayoutFixer(replacer replacer, suggester suggester, tokenizer Tokenizer) *LayoutFixer {
-	return &LayoutFixer{
+func NewLayoutCorrector(replacer replacer, suggester suggester, tokenizer Tokenizer) *LayoutCorrector {
+	return &LayoutCorrector{
 		replacer:            replacer,
 		suggester:           suggester,
 		tokenizer:           tokenizer,
@@ -61,10 +61,10 @@ func NewLayoutFixer(replacer replacer, suggester suggester, tokenizer Tokenizer)
 	}
 }
 
-// Fix replaces segments typed in a wrong layout.
+// Correct replaces segments typed in a wrong layout.
 // The layout is switched for whole whitespace-separated chunks, because other separators
 // may be letters in another layout.
-func (f *LayoutFixer) Fix(phrase string, segments []Segment, maxSuggestions int, opts ...OptionFunc) []Segment {
+func (f *LayoutCorrector) Correct(phrase string, segments []Segment, maxSuggestions int, opts ...OptionFunc) []Segment {
 	result := make([]Segment, 0, len(segments))
 	i := 0
 
@@ -79,7 +79,7 @@ func (f *LayoutFixer) Fix(phrase string, segments []Segment, maxSuggestions int,
 		}
 
 		if mistakes != NoMistake && inside {
-			if fixed := f.fixChunk(phrase, chunk.Start, chunk.End, mistakes, maxSuggestions, opts...); fixed != nil {
+			if fixed := f.correctChunk(phrase, chunk.Start, chunk.End, mistakes, maxSuggestions, opts...); fixed != nil {
 				result = append(result, fixed...)
 
 				continue
@@ -92,9 +92,9 @@ func (f *LayoutFixer) Fix(phrase string, segments []Segment, maxSuggestions int,
 	return append(result, segments[i:]...)
 }
 
-// fixChunk switches the layout of phrase[start:end] and returns its segments, or nil if it is not better.
+// correctChunk switches the layout of phrase[start:end] and returns its segments, or nil if it is not better.
 // mistakes are mistakes of the original segments of this text.
-func (f *LayoutFixer) fixChunk(
+func (f *LayoutCorrector) correctChunk(
 	phrase string,
 	start, end int,
 	mistakes Mistake,

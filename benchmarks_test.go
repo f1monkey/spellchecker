@@ -55,7 +55,7 @@ func Benchmark_Spellchecker_Fix_6_Replacement(b *testing.B) {
 	}
 }
 
-func Benchmark_LayoutFixer_Fix(b *testing.B) {
+func Benchmark_LayoutCorrector_Correct(b *testing.B) {
 	unknown := SuggestionResult{Mistakes: MistakeUnknownWord}
 	results := map[string]SuggestionResult{
 		"ghbdtn":      unknown,
@@ -87,18 +87,18 @@ func Benchmark_LayoutFixer_Fix(b *testing.B) {
 		b.Run(tt.name, func(b *testing.B) {
 			segments := benchmarkSegments(tt.phrase, results)
 			tokenizer := newTokenizerMock(NewStandardTokenizer(), QwertyRuEn, tt.phrase)
-			f := NewLayoutFixer(QwertyRuEn, &spellcheckerMock{results: results}, tokenizer)
+			f := NewLayoutCorrector(QwertyRuEn, &spellcheckerMock{results: results}, tokenizer)
 
 			b.ReportAllocs()
 
 			for b.Loop() {
-				f.Fix(tt.phrase, segments, 5)
+				f.Correct(tt.phrase, segments, 5)
 			}
 		})
 	}
 }
 
-// tokenizerMock returns prepared tokens. It copies them, because LayoutFixer modifies tokens.
+// tokenizerMock returns prepared tokens. It copies them, because LayoutCorrector modifies tokens.
 type tokenizerMock struct {
 	tokens map[string][]Token
 	buf    []Token
