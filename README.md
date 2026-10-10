@@ -114,8 +114,8 @@ result := sc.Suggest(
 
 `PhraseFixer` splits a phrase into segments with a tokenizer and checks each word. Correctors fix more mistakes, they are applied in the given order:
 
-- `NewExtraSpaceCorrector(sc, maxJoin)` joins words split by spaces or punctuation: "hel lo" → "hello".
-- `NewLayoutCorrector(spellchecker.QwertyRuEn(), sc)` fixes words typed in a wrong keyboard layout: "ghbdtn" → "привет".
+- `NewExtraSpaceCorrector(maxJoin)` joins words split by spaces or punctuation: "hel lo" → "hello".
+- `NewLayoutCorrector(spellchecker.QwertyRuEn())` fixes words typed in a wrong keyboard layout: "ghbdtn" → "привет".
 
 ```go
 	sc, err := spellchecker.New(spellchecker.EN, spellchecker.RU)
@@ -124,8 +124,8 @@ result := sc.Suggest(
 	}
 
 	f := spellchecker.NewPhraseFixer(sc, spellchecker.NewStandardTokenizer(),
-		spellchecker.NewExtraSpaceCorrector(sc, 3),
-		spellchecker.NewLayoutCorrector(spellchecker.QwertyRuEn(), sc),
+		spellchecker.NewExtraSpaceCorrector(3),
+		spellchecker.NewLayoutCorrector(spellchecker.QwertyRuEn()),
 	)
 
 	f.Add("hello world привет") // adds words of the phrases to the spellchecker
@@ -144,7 +144,7 @@ result := sc.Suggest(
 
 `Apply` replaces each wrong segment with its first suggestion. Segments without suggestions (unknown words) are kept.
 
-You can also implement the `Corrector` interface. `Correct` receives a `Phrase` with the phrase text and the `PhraseFixer` tokenizer.
+You can also implement the `Corrector` interface. `Correct` receives a `CorrectInput` with the phrase and the spellchecker and tokenizer of `PhraseFixer`.
 
 ### Tokenizers
 

@@ -87,13 +87,13 @@ func Benchmark_LayoutCorrector_Correct(b *testing.B) {
 		b.Run(tt.name, func(b *testing.B) {
 			segments := benchmarkSegments(tt.phrase, results)
 			tokenizer := newTokenizerMock(NewStandardTokenizer(), QwertyRuEn(), tt.phrase)
-			f := NewLayoutCorrector(QwertyRuEn(), &spellcheckerMock{results: results})
-			phrase := Phrase{Text: tt.phrase, Tokenizer: tokenizer}
+			f := NewLayoutCorrector(QwertyRuEn())
+			in := CorrectInput{Phrase: tt.phrase, Tokenizer: tokenizer, Spellchecker: &spellcheckerMock{results: results}}
 
 			b.ReportAllocs()
 
 			for b.Loop() {
-				f.Correct(phrase, segments)
+				f.Correct(in, segments)
 			}
 		})
 	}
@@ -160,13 +160,13 @@ func Benchmark_ExtraSpaceCorrector_Correct(b *testing.B) {
 	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {
 			segments := benchmarkSuggestSegments(sc, tt.phrase)
-			c := NewExtraSpaceCorrector(sc, 3)
-			phrase := Phrase{Text: tt.phrase, Tokenizer: NewStandardTokenizer()}
+			c := NewExtraSpaceCorrector(3)
+			in := CorrectInput{Phrase: tt.phrase, Tokenizer: NewStandardTokenizer(), Spellchecker: sc}
 
 			b.ReportAllocs()
 
 			for b.Loop() {
-				c.Correct(phrase, segments)
+				c.Correct(in, segments)
 			}
 		})
 	}
@@ -188,13 +188,13 @@ func Benchmark_ExtraSpaceCorrector_Correct_Full(b *testing.B) {
 	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {
 			segments := benchmarkSuggestSegments(sc, tt.phrase)
-			c := NewExtraSpaceCorrector(sc, 3)
-			phrase := Phrase{Text: tt.phrase, Tokenizer: NewStandardTokenizer()}
+			c := NewExtraSpaceCorrector(3)
+			in := CorrectInput{Phrase: tt.phrase, Tokenizer: NewStandardTokenizer(), Spellchecker: sc}
 
 			b.ReportAllocs()
 
 			for b.Loop() {
-				c.Correct(phrase, segments)
+				c.Correct(in, segments)
 			}
 		})
 	}

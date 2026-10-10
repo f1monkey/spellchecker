@@ -11,7 +11,7 @@ func Test_NewPhraseFixer(t *testing.T) {
 
 	sc := &spellcheckerMock{}
 	tok := NewWhitespaceTokenizer()
-	lf := NewLayoutCorrector(QwertyRuEn(), sc)
+	lf := NewLayoutCorrector(QwertyRuEn())
 	other := &correctorMock{}
 
 	f := NewPhraseFixer(sc, tok, lf, other)
@@ -377,7 +377,7 @@ type correctorMock struct {
 	add []Segment
 }
 
-func (m *correctorMock) Correct(_ Phrase, segments []Segment, _ ...Option) []Segment {
+func (m *correctorMock) Correct(_ CorrectInput, segments []Segment, _ ...Option) []Segment {
 	return append(segments, m.add...)
 }
 

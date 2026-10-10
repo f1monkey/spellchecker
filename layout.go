@@ -50,15 +50,13 @@ type replacer interface {
 // LayoutCorrector corrects words typed in a wrong keyboard layout.
 type LayoutCorrector struct {
 	replacer            replacer
-	suggester           suggester
 	whitespaceTokenizer Tokenizer
 }
 
 // NewLayoutCorrector creates a LayoutCorrector. The replacer must map each rune to one rune.
-func NewLayoutCorrector(replacer replacer, suggester suggester) *LayoutCorrector {
+func NewLayoutCorrector(replacer replacer) *LayoutCorrector {
 	return &LayoutCorrector{
 		replacer:            replacer,
-		suggester:           suggester,
 		whitespaceTokenizer: NewWhitespaceTokenizer(),
 	}
 }
@@ -66,11 +64,11 @@ func NewLayoutCorrector(replacer replacer, suggester suggester) *LayoutCorrector
 // Correct replaces segments typed in a wrong layout.
 // The layout is switched for whole whitespace-separated chunks, because other separators
 // may be letters in another layout.
-func (f *LayoutCorrector) Correct(phrase Phrase, segments []Segment, opts ...Option) []Segment {
+func (f *LayoutCorrector) Correct(in CorrectInput, segments []Segment, opts ...Option) []Segment {
 	result := make([]Segment, 0, len(segments))
 	i := 0
 
-	for _, chunk := range f.whitespaceTokenizer.Tokenize(phrase.Text) {
+	for _, chunk := range f.whitespaceTokenizer.Tokenize(in.Phrase) {
 		first := i
 		mistakes := NoMistake
 		inside := true
@@ -81,7 +79,7 @@ func (f *LayoutCorrector) Correct(phrase Phrase, segments []Segment, opts ...Opt
 		}
 
 		if mistakes != NoMistake && inside {
-			if fixed := f.correctChunk(phrase, chunk.Start, chunk.End, mistakes, opts...); fixed != nil {
+			if fixed := f.correctChunk(in, chunk.Start, chunk.End, mistakes, opts...); fixed != nil {
 				result = append(result, fixed...)
 
 				continue
@@ -97,19 +95,19 @@ func (f *LayoutCorrector) Correct(phrase Phrase, segments []Segment, opts ...Opt
 // correctChunk switches the layout of phrase[start:end] and returns its segments, or nil if it is not better.
 // mistakes are mistakes of the original segments of this text.
 func (f *LayoutCorrector) correctChunk(
-	phrase Phrase,
+	in CorrectInput,
 	start, end int,
 	mistakes Mistake,
 	opts ...Option,
 ) []Segment {
-	text := phrase.Text[start:end]
+	text := in.Phrase[start:end]
 
 	replaced := f.replacer.Replace(text)
 	if replaced == text {
 		return nil
 	}
 
-	tokens := phrase.Tokenizer.Tokenize(replaced)
+	tokens := in.Tokenizer.Tokenize(replaced)
 	if len(tokens) == 0 || !toSourceOffsets(text, replaced, tokens) {
 		return nil
 	}
@@ -142,7 +140,7 @@ func (f *LayoutCorrector) correctChunk(
 	prevEnd := 0
 
 	for _, token := range tokens {
-		suggestions := f.suggester.Suggest(token.Text, opts...)
+		suggestions := in.Spellchecker.Suggest(token.Text, opts...)
 		if suggestions.Mistakes.Has(MistakeUnknownWord) {
 			return nil
 		}

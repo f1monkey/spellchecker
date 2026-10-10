@@ -9,10 +9,7 @@ import (
 func Test_NewExtraSpaceCorrector(t *testing.T) {
 	t.Parallel()
 
-	sc := &spellcheckerMock{}
-
-	c := NewExtraSpaceCorrector(sc, 3)
-	require.Same(t, sc, c.checker)
+	c := NewExtraSpaceCorrector(3)
 	require.Equal(t, 3, c.maxJoin)
 }
 
@@ -168,7 +165,7 @@ func Test_ExtraSpaceCorrector_Correct(t *testing.T) {
 			}
 
 			sc := &spellcheckerMock{results: tt.results}
-			f := NewPhraseFixer(sc, NewStandardTokenizer(), NewExtraSpaceCorrector(sc, maxJoin))
+			f := NewPhraseFixer(sc, NewStandardTokenizer(), NewExtraSpaceCorrector(maxJoin))
 
 			require.Equal(t, tt.want, segmentViews(t, tt.phrase, f.Fix(tt.phrase, WithMaxSuggestions(3))))
 		})
@@ -177,7 +174,7 @@ func Test_ExtraSpaceCorrector_Correct(t *testing.T) {
 	t.Run("segment offsets are in bytes of the phrase", func(t *testing.T) {
 		t.Parallel()
 
-		c := NewExtraSpaceCorrector(&spellcheckerMock{}, 3)
+		c := NewExtraSpaceCorrector(3)
 		segments := []Segment{
 			{Text: "ок", Start: 0, End: 4, Mistakes: NoMistake},
 			{Text: "при", Start: 5, End: 11, Mistakes: MistakeUnknownWord},
@@ -186,7 +183,7 @@ func Test_ExtraSpaceCorrector_Correct(t *testing.T) {
 
 		require.Equal(t, []Segment{
 			{Text: "ок при вет", Start: 0, End: 18, Suggestions: []Suggestion{{Value: "окпривет"}}, Mistakes: MistakeExtraSpace},
-		}, c.Correct(Phrase{Text: "ок при вет", Tokenizer: NewStandardTokenizer()}, segments))
+		}, c.Correct(CorrectInput{Phrase: "ок при вет", Tokenizer: NewStandardTokenizer(), Spellchecker: &spellcheckerMock{}}, segments))
 	})
 }
 
@@ -199,8 +196,8 @@ func Test_ExtraSpaceCorrector_Correct_Integration(t *testing.T) {
 
 	phrase := "hel lo in to wor ld ghbdtn"
 	f := NewPhraseFixer(s, NewStandardTokenizer(),
-		NewExtraSpaceCorrector(s, 3),
-		NewLayoutCorrector(QwertyRuEn(), s),
+		NewExtraSpaceCorrector(3),
+		NewLayoutCorrector(QwertyRuEn()),
 	)
 
 	require.Equal(t, []segmentView{

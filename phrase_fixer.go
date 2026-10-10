@@ -4,6 +4,7 @@ import "strings"
 
 type suggester interface {
 	Suggest(word string, opts ...Option) SuggestionResult
+	IsCorrect(word string) bool
 	AddWeight(weight uint, words ...string)
 }
 
@@ -58,16 +59,16 @@ func (r PhraseFixResult) Apply(phrase string) string {
 	return b.String()
 }
 
-// Phrase is a phrase passed to correctors.
-type Phrase struct {
-	Text string
-	// Tokenizer is the tokenizer of PhraseFixer.
-	Tokenizer Tokenizer
+// CorrectInput is the phrase with the spellchecker and the tokenizer of PhraseFixer.
+type CorrectInput struct {
+	Phrase       string
+	Tokenizer    Tokenizer
+	Spellchecker suggester
 }
 
 // Corrector corrects segments of the phrase found by PhraseFixer.
 type Corrector interface {
-	Correct(phrase Phrase, segments []Segment, opts ...Option) []Segment
+	Correct(in CorrectInput, segments []Segment, opts ...Option) []Segment
 }
 
 // PhraseFixer fixes mistakes in phrases.
@@ -125,9 +126,9 @@ func (f *PhraseFixer) Fix(phrase string, opts ...Option) PhraseFixResult {
 		})
 	}
 
-	p := Phrase{Text: phrase, Tokenizer: f.tokenizer}
+	in := CorrectInput{Phrase: phrase, Tokenizer: f.tokenizer, Spellchecker: f.spellchecker}
 	for _, corrector := range f.correctors {
-		segments = corrector.Correct(p, segments, opts...)
+		segments = corrector.Correct(in, segments, opts...)
 	}
 
 	return PhraseFixResult{
