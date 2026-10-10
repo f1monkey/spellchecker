@@ -12,6 +12,11 @@ Yet another spellchecker written in go.
     - [Quick start](#quick-start)
     - [Options](#options)
     - [Phrases](#phrases)
+      - [Mistakes](#mistakes)
+      - [ExtraSpaceCorrector](#extraspacecorrector)
+      - [LayoutCorrector](#layoutcorrector)
+      - [Order of correctors](#order-of-correctors)
+      - [Custom correctors](#custom-correctors)
     - [Tokenizers](#tokenizers)
     - [Save/load](#saveload)
   - [Benchmarks](#benchmarks)
@@ -112,10 +117,13 @@ result := sc.Suggest(
 
 ### Phrases
 
-`PhraseFixer` splits a phrase into segments with a tokenizer and checks each word. Correctors fix more mistakes, they are applied in the given order:
+`PhraseFixer` fixes whole phrases:
 
-- `NewExtraSpaceCorrector(maxJoin)` joins words split by spaces or punctuation: "hel lo" → "hello".
-- `NewLayoutCorrector(spellchecker.QwertyRuEn())` fixes words typed in a wrong keyboard layout: "ghbdtn" → "привет".
+1. The tokenizer splits the phrase into words. Each word becomes a `Segment`.
+2. Each word is checked with `Suggest`: the segment gets its `Mistakes` and `Suggestions`.
+3. The segments are passed through the correctors in the given order. Each corrector gets the result of the previous one and may replace any segments with new ones.
+
+The result is a list of segments in phrase order. Text between segments (spaces, punctuation) is not in the result, it stays as is.
 
 ```go
 	sc, err := spellchecker.New(spellchecker.EN, spellchecker.RU)
@@ -144,7 +152,86 @@ result := sc.Suggest(
 
 `Apply` replaces each wrong segment with its first suggestion. Segments without suggestions (unknown words) are kept.
 
-You can also implement the `Corrector` interface. `Correct` receives a `CorrectInput` with the phrase and the spellchecker and tokenizer of `PhraseFixer`.
+#### Mistakes
+
+`Segment.Mistakes` is a bit set, check it with `Has`: `s.Mistakes.Has(spellchecker.MistakeTypo)`.
+
+| Mistake | Set by | Meaning |
+|---|---|---|
+| `NoMistake` | `Suggest` | the word is in the dictionary |
+| `MistakeTypo` | `Suggest` | the word is not in the dictionary, `Suggestions` has similar words |
+| `MistakeUnknownWord` | `Suggest` | the word is not in the dictionary and there are no similar words |
+| `MistakeLayout` | `LayoutCorrector` | the text is typed in a wrong keyboard layout |
+| `MistakeExtraSpace` | `ExtraSpaceCorrector` | one word is split by spaces or punctuation |
+
+Correctors may combine bits: a word typed in a wrong layout with a typo is `MistakeLayout | MistakeTypo`.
+
+#### ExtraSpaceCorrector
+
+`NewExtraSpaceCorrector(maxJoin)` joins words split by extra spaces or punctuation: "hel lo" → "hello", "wi th,out" → "without".
+
+- It tries to join up to `maxJoin` neighbor segments. The text between them is dropped, so "hel, lo" is joined into "hello" too.
+- At least one of the joined segments must have a mistake. Correct words are never joined: "in to" stays "in to", even if "into" is in the dictionary.
+- The joined word must be in the dictionary. A joined word with a typo is not used.
+- The longest join wins: "wi th out" → "without", not "with" + "out".
+- The joined segments are replaced with one segment: `Text` is the original text ("hel lo"), `Suggestions` is the joined word, `Mistakes` is `MistakeExtraSpace`.
+
+Words are checked with `IsCorrect` only, so this corrector is cheap: it does no fuzzy search.
+
+Words are joined through any punctuation, also through the end of a sentence: "...hel. lo..." becomes "...hello...", if "hel" or "lo" is wrong.
+
+#### LayoutCorrector
+
+`NewLayoutCorrector(replacer)` fixes text typed in a wrong keyboard layout: "ghbdtn" → "привет", "руддщ" → "hello". `spellchecker.QwertyRuEn()` switches between US QWERTY and Russian ЙЦУКЕН in both directions. You can make your own layout with `spellchecker.LayoutReplacer`: a map from a rune to a rune.
+
+- The layout is switched for whole whitespace-separated chunks, not for single segments. Punctuation keys may be letters in the other layout: "j,]tv" is "объем", but the standard tokenizer would split it into "j" and "tv".
+- A chunk is switched only if at least one of its segments has a mistake.
+- The switched chunk is split into words by the `PhraseFixer` tokenizer, and each word is checked with `Suggest`. The switch is "all or nothing":
+  - if any switched word is unknown, the chunk is kept as is;
+  - if the original chunk has an unknown word, the switch is used when all switched words are found: correct words or typos ("ghbdtnn" → "приветт" → "привет");
+  - if the original chunk has only typos, the switch is used only when all switched words are correct. Otherwise the original typo is better than a typo in another layout.
+- The switched words become new segments with `MistakeLayout`. A correct switched word has itself as the only suggestion. A switched word with a typo also has `MistakeTypo` and suggestions for the switched word.
+- Text between words that changes in the other layout gets its own segment, so that `Apply` switches it too: "руддщбцщкдв" → "hello", ",", "world".
+- Chunks with a segment that crosses a whitespace are skipped. Such segments are made by other correctors, for example by `ExtraSpaceCorrector`.
+
+Each switched word costs one `Suggest` call, so this corrector is more expensive than `ExtraSpaceCorrector`.
+
+#### Order of correctors
+
+Correctors work with the original text of the phrase, so the order matters. Put `ExtraSpaceCorrector` before `LayoutCorrector`:
+
+- `ExtraSpaceCorrector` joins the original text. If `LayoutCorrector` runs first, the switched segments still have the text in the old layout, and they could be joined into a wrong word.
+- `LayoutCorrector` skips the joined segments, because they cross whitespace.
+
+So "ghb dtn" (wrong layout and an extra space) is not fixed by both correctors together.
+
+#### Custom correctors
+
+Implement the `Corrector` interface. `Correct` receives a `CorrectInput` with the phrase and the spellchecker and the tokenizer of `PhraseFixer`, and the segments from the previous corrector. It must return segments in phrase order, which don't overlap, with `Text` equal to `Phrase[Start:End]`. Don't modify the input slice, return a new one.
+
+For example, a corrector that ignores mistakes in short words:
+
+```go
+type shortWordsCorrector struct{}
+
+func (shortWordsCorrector) Correct(
+	in spellchecker.CorrectInput,
+	segments []spellchecker.Segment,
+	_ ...spellchecker.Option,
+) []spellchecker.Segment {
+	result := make([]spellchecker.Segment, 0, len(segments))
+
+	for _, s := range segments {
+		if utf8.RuneCountInString(s.Text) < 3 {
+			s.Suggestions, s.Mistakes = nil, spellchecker.NoMistake
+		}
+
+		result = append(result, s)
+	}
+
+	return result
+}
+```
 
 ### Tokenizers
 
