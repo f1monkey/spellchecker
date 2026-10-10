@@ -1,7 +1,7 @@
 package spellchecker
 
 type suggester interface {
-	Suggest(word string, n int, opts ...OptionFunc) SuggestionResult
+	Suggest(word string, opts ...OptionFunc) SuggestionResult
 	AddWeight(weight uint, words ...string)
 }
 
@@ -27,7 +27,7 @@ type PhraseFixResult struct {
 
 // Corrector corrects segments of the phrase found by PhraseFixer.
 type Corrector interface {
-	Correct(phrase string, segments []Segment, n int, opts ...OptionFunc) []Segment
+	Correct(phrase string, segments []Segment, opts ...OptionFunc) []Segment
 }
 
 // PhraseFixer fixes typos and wrong keyboard layout in phrases.
@@ -65,7 +65,7 @@ func (f *PhraseFixer) AddPhraseWeight(weight uint, phrases ...string) {
 }
 
 // Fix splits the phrase into segments, finds mistakes in them and passes them through the correctors.
-func (f *PhraseFixer) Fix(phrase string, n int, opts ...OptionFunc) PhraseFixResult {
+func (f *PhraseFixer) Fix(phrase string, opts ...OptionFunc) PhraseFixResult {
 	tokens := f.tokenizer.Tokenize(phrase)
 	if len(tokens) == 0 {
 		return PhraseFixResult{}
@@ -74,7 +74,7 @@ func (f *PhraseFixer) Fix(phrase string, n int, opts ...OptionFunc) PhraseFixRes
 	segments := make([]Segment, 0, len(tokens))
 
 	for _, token := range tokens {
-		suggestionResult := f.spellchecker.Suggest(token.Text, n, opts...)
+		suggestionResult := f.spellchecker.Suggest(token.Text, opts...)
 
 		segments = append(segments, Segment{
 			Start:       token.Start,
@@ -85,7 +85,7 @@ func (f *PhraseFixer) Fix(phrase string, n int, opts ...OptionFunc) PhraseFixRes
 	}
 
 	for _, corrector := range f.correctors {
-		segments = corrector.Correct(phrase, segments, n, opts...)
+		segments = corrector.Correct(phrase, segments, opts...)
 	}
 
 	return PhraseFixResult{

@@ -267,7 +267,7 @@ func Test_LayoutCorrector_Correct(t *testing.T) {
 			sc := &spellcheckerMock{results: tt.results}
 			f := NewPhraseFixer(sc, NewStandardTokenizer(), NewLayoutCorrector(QwertyRuEn, sc, NewStandardTokenizer()))
 
-			require.Equal(t, tt.want, segmentViews(t, tt.phrase, f.Fix(tt.phrase, 3)))
+			require.Equal(t, tt.want, segmentViews(t, tt.phrase, f.Fix(tt.phrase, WithMaxSuggestions(3))))
 		})
 	}
 
@@ -276,7 +276,7 @@ func Test_LayoutCorrector_Correct(t *testing.T) {
 
 		f := NewLayoutCorrector(QwertyRuEn, &spellcheckerMock{}, NewStandardTokenizer())
 
-		got := f.correctChunk("ok руддщбцщкдв", 3, 25, MistakeUnknownWord, 3)
+		got := f.correctChunk("ok руддщбцщкдв", 3, 25, MistakeUnknownWord)
 		require.Equal(t, []Segment{
 			{Start: 3, End: 13, Suggestions: []Suggestion{{Value: "hello"}}, Mistakes: MistakeLayout},
 			{Start: 13, End: 15, Suggestions: []Suggestion{{Value: ","}}, Mistakes: MistakeLayout},
@@ -296,7 +296,7 @@ func Test_LayoutCorrector_Correct(t *testing.T) {
 		require.Equal(t, []Segment{
 			{Start: 0, End: 10, Mistakes: MistakeUnknownWord},
 			{Start: 11, End: 17, Suggestions: []Suggestion{{Value: "привет"}}, Mistakes: MistakeLayout},
-		}, f.Correct("ghbdtn vbh ghbdtn", segments, 3))
+		}, f.Correct("ghbdtn vbh ghbdtn", segments))
 	})
 }
 
@@ -319,5 +319,5 @@ func Test_LayoutCorrector_Correct_Integration(t *testing.T) {
 		{Text: "ghbdtnn", Suggestions: []string{"привет"}, Mistakes: MistakeLayout | MistakeTypo},
 		{Text: "qwzx", Mistakes: MistakeUnknownWord},
 		{Text: "j,]tv", Suggestions: []string{"объем"}, Mistakes: MistakeLayout},
-	}, segmentViews(t, phrase, f.Fix(phrase, 3)))
+	}, segmentViews(t, phrase, f.Fix(phrase, WithMaxSuggestions(3))))
 }

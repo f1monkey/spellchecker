@@ -55,13 +55,18 @@ go get -v github.com/f1monkey/spellchecker/v4
    2. Suggest corrections:
 
    ```go
-   	result := sc.Suggest("rang", 10)
+   	result := sc.Suggest("rang")
    	fmt.Println(result.Suggestions) // [{range ...} {orange ...}]
    ```
 
 ### Options
 
-These options are passed to `Suggest`.
+These options are passed to `Suggest` and `PhraseFixer.Fix`.
+
+- **`WithMaxSuggestions(n int)`**
+  Sets the maximum number of suggestions for a word.
+
+  Default: `10`.
 
 - **`WithMaxErrors(maxErrors int)`**
   Sets the maximum allowed difference in bits between the input word and dictionary candidates.
@@ -94,11 +99,34 @@ Example usage:
 ```go
 result := sc.Suggest(
 	"rang",
-	10,
+	spellchecker.WithMaxSuggestions(5),
 	spellchecker.WithMaxErrors(1),
 	spellchecker.WithScoringFunc(myCustomScoring),
 )
 ```
+
+### Phrases
+
+`PhraseFixer` splits a phrase into segments with a tokenizer and checks each word. Correctors fix more mistakes, they are applied in the given order:
+
+- `NewExtraSpaceCorrector(sc, maxJoin)` joins words split by spaces or punctuation: "hel lo" → "hello".
+- `NewLayoutCorrector(spellchecker.QwertyRuEn, sc, tokenizer)` fixes words typed in a wrong keyboard layout: "ghbdtn" → "привет". The tokenizer must be the same as in `PhraseFixer`.
+
+```go
+	tok := spellchecker.NewStandardTokenizer()
+	f := spellchecker.NewPhraseFixer(sc, tok,
+		spellchecker.NewExtraSpaceCorrector(sc, 3),
+		spellchecker.NewLayoutCorrector(spellchecker.QwertyRuEn, sc, tok),
+	)
+
+	result := f.Fix("hel lo ghbdtn", spellchecker.WithMaxSuggestions(3))
+	for _, s := range result.Segments {
+		// s.Start and s.End are byte offsets in the phrase
+		fmt.Println(s.Start, s.End, s.Mistakes, s.Suggestions)
+	}
+```
+
+You can also implement the `Corrector` interface.
 
 ### Save/load
 

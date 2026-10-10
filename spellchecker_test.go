@@ -77,7 +77,7 @@ func Test_Spellchecker_AddWeight(t *testing.T) {
 		s.AddWeight(3, "ban")
 		s.AddWeight(1, "bin")
 
-		result := s.Suggest("ben", 2)
+		result := s.Suggest("ben", WithMaxSuggestions(2))
 		require.Equal(t, []string{"ban", "bin"}, suggestionValues(result))
 	})
 
@@ -93,7 +93,7 @@ func Test_Spellchecker_AddWeight(t *testing.T) {
 		require.True(t, s.IsCorrect("ban"))
 		require.True(t, s.IsCorrect("bin"))
 
-		result := s.Suggest("ben", 2)
+		result := s.Suggest("ben", WithMaxSuggestions(2))
 		require.Equal(t, []string{"ban", "bin"}, suggestionValues(result))
 	})
 }
@@ -134,7 +134,7 @@ func Test_Spellchecker_Save(t *testing.T) {
 	require.Equal(t, m1.dict.ID("brandnew"), m2.dict.ID("brandnew"))
 	require.NotEqual(t, m2.dict.ID("green"), m2.dict.ID("brandnew"))
 
-	require.Equal(t, m1.Suggest("arang", 5), m2.Suggest("arang", 5))
+	require.Equal(t, m1.Suggest("arang", WithMaxSuggestions(5)), m2.Suggest("arang", WithMaxSuggestions(5)))
 }
 
 func Test_Spellchecker_Suggest(t *testing.T) {
@@ -144,7 +144,7 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 		t.Parallel()
 
 		s := newSampleSpellchecker(t)
-		result := s.Suggest("arang", 5)
+		result := s.Suggest("arang", WithMaxSuggestions(5))
 		require.Equal(t, SuggestionResult{
 			Mistakes: MistakeTypo,
 			Suggestions: []Suggestion{
@@ -158,7 +158,7 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 		t.Parallel()
 
 		s := newSampleSpellchecker(t)
-		result := s.Suggest("rang", 5, WithMaxErrors(1))
+		result := s.Suggest("rang", WithMaxSuggestions(5), WithMaxErrors(1))
 		require.Equal(t, SuggestionResult{
 			Mistakes: MistakeTypo,
 			Suggestions: []Suggestion{
@@ -166,7 +166,7 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 			},
 		}, result)
 
-		result = s.Suggest("arang", 5, WithMaxErrors(2))
+		result = s.Suggest("arang", WithMaxSuggestions(5), WithMaxErrors(2))
 		require.Equal(t, SuggestionResult{
 			Mistakes: MistakeTypo,
 			Suggestions: []Suggestion{
@@ -176,11 +176,22 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 		}, result)
 	})
 
+	t.Run("max suggestions", func(t *testing.T) {
+		t.Parallel()
+
+		s, err := New(EN)
+		require.NoError(t, err)
+		s.Add("ac", "ad", "ae", "af", "ag", "ah", "ai", "aj", "ak", "al", "am", "an")
+
+		require.Len(t, s.Suggest("ab").Suggestions, defaultMaxSuggestions)
+		require.Len(t, s.Suggest("ab", WithMaxSuggestions(3)).Suggestions, 3)
+	})
+
 	t.Run("valid word", func(t *testing.T) {
 		t.Parallel()
 
 		s := newSampleSpellchecker(t)
-		result := s.Suggest("orange", 5)
+		result := s.Suggest("orange", WithMaxSuggestions(5))
 		require.Equal(t, SuggestionResult{Mistakes: NoMistake}, result)
 	})
 
@@ -188,7 +199,7 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 		t.Parallel()
 
 		s := newSampleSpellchecker(t)
-		result := s.Suggest("qwerty", 5)
+		result := s.Suggest("qwerty", WithMaxSuggestions(5))
 		require.Equal(t, SuggestionResult{Mistakes: MistakeUnknownWord}, result)
 	})
 }

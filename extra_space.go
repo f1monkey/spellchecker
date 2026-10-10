@@ -23,7 +23,7 @@ func NewExtraSpaceCorrector(checker wordChecker, maxJoin int) *ExtraSpaceCorrect
 
 // Correct replaces neighbor segments with a correct word joined from them without the text between.
 // Segments are joined only if at least one of them has a mistake, so correct words stay separate.
-func (c *ExtraSpaceCorrector) Correct(phrase string, segments []Segment, _ int, _ ...OptionFunc) []Segment {
+func (c *ExtraSpaceCorrector) Correct(phrase string, segments []Segment, _ ...OptionFunc) []Segment {
 	result := make([]Segment, 0, len(segments))
 
 	for i := 0; i < len(segments); {

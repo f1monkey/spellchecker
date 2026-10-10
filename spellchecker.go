@@ -7,7 +7,10 @@ import (
 	"sync"
 )
 
-const defaultMaxErrors = 2
+const (
+	defaultMaxErrors      = 2
+	defaultMaxSuggestions = 10
+)
 
 // Mistake is a set of mistakes.
 type Mistake int
@@ -36,6 +39,13 @@ type OptionFunc func(opts *searchOptions)
 func WithMaxErrors(maxErrors int) OptionFunc {
 	return func(opts *searchOptions) {
 		opts.maxErrors = maxErrors
+	}
+}
+
+// WithMaxSuggestions sets the max number of suggestions for a word. Default is 10.
+func WithMaxSuggestions(n int) OptionFunc {
+	return func(opts *searchOptions) {
+		opts.maxSuggestions = n
 	}
 }
 
@@ -110,8 +120,8 @@ type SuggestionResult struct {
 // IsCorrect reports whether the word has no mistakes.
 func (r SuggestionResult) IsCorrect() bool { return r.Mistakes == NoMistake }
 
-// Suggest returns up to n fix suggestions for the word.
-func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) SuggestionResult {
+// Suggest returns fix suggestions for the word.
+func (s *Spellchecker) Suggest(word string, opts ...OptionFunc) SuggestionResult {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 
@@ -119,7 +129,11 @@ func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) Suggestio
 		return SuggestionResult{}
 	}
 
-	searchOpts := searchOptions{maxErrors: defaultMaxErrors, scoringFunc: defaultScoringFunc}
+	searchOpts := searchOptions{
+		maxErrors:      defaultMaxErrors,
+		maxSuggestions: defaultMaxSuggestions,
+		scoringFunc:    defaultScoringFunc,
+	}
 	for _, o := range opts {
 		o(&searchOpts)
 	}
@@ -128,7 +142,7 @@ func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) Suggestio
 		searchOpts.scoringFunc = defaultScoringFunc
 	}
 
-	matches := s.dict.Find(word, n, searchOpts.maxErrors, searchOpts.scoringFunc)
+	matches := s.dict.Find(word, searchOpts.maxSuggestions, searchOpts.maxErrors, searchOpts.scoringFunc)
 	if len(matches) == 0 {
 		return SuggestionResult{Mistakes: MistakeUnknownWord}
 	}
@@ -171,8 +185,9 @@ func Load(reader io.Reader) (*Spellchecker, error) {
 }
 
 type searchOptions struct {
-	maxErrors   int
-	scoringFunc ScoringFunc
+	maxErrors      int
+	maxSuggestions int
+	scoringFunc    ScoringFunc
 }
 
 // ScoringFunc scores a candidate for the source word. false filters the candidate out.

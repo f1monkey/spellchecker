@@ -31,7 +31,7 @@ func Benchmark_Spellchecker_Suggest_3(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		m.Suggest("tee", 5)
+		m.Suggest("tee", WithMaxSuggestions(5))
 	}
 }
 
@@ -41,7 +41,7 @@ func Benchmark_Spellchecker_Fix_6_Transposition(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		m.Suggest("oragne", 5)
+		m.Suggest("oragne", WithMaxSuggestions(5))
 	}
 }
 
@@ -51,7 +51,7 @@ func Benchmark_Spellchecker_Fix_6_Replacement(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		m.Suggest("problam", 5)
+		m.Suggest("problam", WithMaxSuggestions(5))
 	}
 }
 
@@ -92,7 +92,7 @@ func Benchmark_LayoutCorrector_Correct(b *testing.B) {
 			b.ReportAllocs()
 
 			for b.Loop() {
-				f.Correct(tt.phrase, segments, 5)
+				f.Correct(tt.phrase, segments)
 			}
 		})
 	}
@@ -164,7 +164,7 @@ func Benchmark_ExtraSpaceCorrector_Correct(b *testing.B) {
 			b.ReportAllocs()
 
 			for b.Loop() {
-				c.Correct(tt.phrase, segments, 5)
+				c.Correct(tt.phrase, segments)
 			}
 		})
 	}
@@ -191,7 +191,7 @@ func Benchmark_ExtraSpaceCorrector_Correct_Full(b *testing.B) {
 			b.ReportAllocs()
 
 			for b.Loop() {
-				c.Correct(tt.phrase, segments, 5)
+				c.Correct(tt.phrase, segments)
 			}
 		})
 	}
@@ -211,7 +211,7 @@ func newWordsMock(words ...string) *wordsMock {
 	return m
 }
 
-func (m *wordsMock) Suggest(word string, _ int, _ ...OptionFunc) SuggestionResult {
+func (m *wordsMock) Suggest(word string, _ ...OptionFunc) SuggestionResult {
 	if m.IsCorrect(word) {
 		return SuggestionResult{}
 	}
@@ -229,7 +229,7 @@ func (m *wordsMock) AddWeight(uint, ...string) {}
 
 // benchmarkSuggestSegments returns segments of the phrase found by PhraseFixer without correctors.
 func benchmarkSuggestSegments(sc suggester, phrase string) []Segment {
-	return NewPhraseFixer(sc, NewStandardTokenizer()).Fix(phrase, 5).Segments
+	return NewPhraseFixer(sc, NewStandardTokenizer()).Fix(phrase, WithMaxSuggestions(5)).Segments
 }
 
 func Benchmark_Norvig1(b *testing.B) {
@@ -292,7 +292,7 @@ func benchmarkNorvig(b *testing.B, dataPath string) {
 
 				b.StartTimer()
 
-				result := m.Suggest(word, 10)
+				result := m.Suggest(word, WithMaxSuggestions(10))
 
 				b.StopTimer()
 

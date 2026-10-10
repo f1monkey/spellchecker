@@ -170,7 +170,7 @@ func Test_ExtraSpaceCorrector_Correct(t *testing.T) {
 			sc := &spellcheckerMock{results: tt.results}
 			f := NewPhraseFixer(sc, NewStandardTokenizer(), NewExtraSpaceCorrector(sc, maxJoin))
 
-			require.Equal(t, tt.want, segmentViews(t, tt.phrase, f.Fix(tt.phrase, 3)))
+			require.Equal(t, tt.want, segmentViews(t, tt.phrase, f.Fix(tt.phrase, WithMaxSuggestions(3))))
 		})
 	}
 
@@ -186,7 +186,7 @@ func Test_ExtraSpaceCorrector_Correct(t *testing.T) {
 
 		require.Equal(t, []Segment{
 			{Start: 0, End: 18, Suggestions: []Suggestion{{Value: "окпривет"}}, Mistakes: MistakeExtraSpace},
-		}, c.Correct("ок при вет", segments, 3))
+		}, c.Correct("ок при вет", segments))
 	})
 }
 
@@ -209,5 +209,5 @@ func Test_ExtraSpaceCorrector_Correct_Integration(t *testing.T) {
 		{Text: "to", Mistakes: NoMistake},
 		{Text: "wor ld", Suggestions: []string{"world"}, Mistakes: MistakeExtraSpace},
 		{Text: "ghbdtn", Suggestions: []string{"привет"}, Mistakes: MistakeLayout},
-	}, segmentViews(t, phrase, f.Fix(phrase, 3)))
+	}, segmentViews(t, phrase, f.Fix(phrase, WithMaxSuggestions(3))))
 }

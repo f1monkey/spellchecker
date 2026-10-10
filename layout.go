@@ -64,7 +64,7 @@ func NewLayoutCorrector(replacer replacer, suggester suggester, tokenizer Tokeni
 // Correct replaces segments typed in a wrong layout.
 // The layout is switched for whole whitespace-separated chunks, because other separators
 // may be letters in another layout.
-func (f *LayoutCorrector) Correct(phrase string, segments []Segment, maxSuggestions int, opts ...OptionFunc) []Segment {
+func (f *LayoutCorrector) Correct(phrase string, segments []Segment, opts ...OptionFunc) []Segment {
 	result := make([]Segment, 0, len(segments))
 	i := 0
 
@@ -79,7 +79,7 @@ func (f *LayoutCorrector) Correct(phrase string, segments []Segment, maxSuggesti
 		}
 
 		if mistakes != NoMistake && inside {
-			if fixed := f.correctChunk(phrase, chunk.Start, chunk.End, mistakes, maxSuggestions, opts...); fixed != nil {
+			if fixed := f.correctChunk(phrase, chunk.Start, chunk.End, mistakes, opts...); fixed != nil {
 				result = append(result, fixed...)
 
 				continue
@@ -98,7 +98,6 @@ func (f *LayoutCorrector) correctChunk(
 	phrase string,
 	start, end int,
 	mistakes Mistake,
-	maxSuggestions int,
 	opts ...OptionFunc,
 ) []Segment {
 	text := phrase[start:end]
@@ -140,7 +139,7 @@ func (f *LayoutCorrector) correctChunk(
 	prevEnd := 0
 
 	for _, token := range tokens {
-		suggestions := f.suggester.Suggest(token.Text, maxSuggestions, opts...)
+		suggestions := f.suggester.Suggest(token.Text, opts...)
 		if suggestions.Mistakes.Has(MistakeUnknownWord) {
 			return nil
 		}
