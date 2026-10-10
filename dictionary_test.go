@@ -1,9 +1,8 @@
-package dictionary
+package spellchecker
 
 import (
 	"testing"
 
-	"github.com/f1monkey/spellchecker/v4/internal/alphabet"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,7 +12,7 @@ func Test_New(t *testing.T) {
 	t.Run("must reject an empty alphabet", func(t *testing.T) {
 		t.Parallel()
 
-		dict, err := New("")
+		dict, err := newDictionary("")
 		require.Error(t, err)
 		require.Nil(t, dict)
 	})
@@ -22,7 +21,7 @@ func Test_New(t *testing.T) {
 func Test_Dictionary_Has(t *testing.T) {
 	t.Parallel()
 
-	dict, err := New(alphabet.EN)
+	dict, err := newDictionary(EN)
 	require.NoError(t, err)
 
 	require.False(t, dict.Has("word"))
@@ -37,7 +36,7 @@ func Test_Dictionary_ID(t *testing.T) {
 	t.Run("must return 0 for unexisting word", func(t *testing.T) {
 		t.Parallel()
 
-		dict, err := New(alphabet.EN)
+		dict, err := newDictionary(EN)
 		require.NoError(t, err)
 
 		id := dict.ID("word")
@@ -47,7 +46,7 @@ func Test_Dictionary_ID(t *testing.T) {
 	t.Run("must return id for existing word", func(t *testing.T) {
 		t.Parallel()
 
-		dict, err := New(alphabet.EN)
+		dict, err := newDictionary(EN)
 		require.NoError(t, err)
 
 		dict.ids["word"] = 1
@@ -62,7 +61,7 @@ func Test_Dictionary_Add(t *testing.T) {
 	t.Run("must add word to dictionary index", func(t *testing.T) {
 		t.Parallel()
 
-		dict, err := New(alphabet.EN)
+		dict, err := newDictionary(EN)
 		require.NoError(t, err)
 
 		id := dict.Add("qwe", 1)
@@ -89,7 +88,7 @@ func Test_Dictionary_Inc(t *testing.T) {
 	t.Run("must increase counter value", func(t *testing.T) {
 		t.Parallel()
 
-		dict, err := New(alphabet.EN)
+		dict, err := newDictionary(EN)
 		require.NoError(t, err)
 
 		dict.counts[1] = 0
@@ -105,7 +104,7 @@ func Test_Dictionary_Inc(t *testing.T) {
 	t.Run("must ignore an unknown id", func(t *testing.T) {
 		t.Parallel()
 
-		dict, err := New(alphabet.EN)
+		dict, err := newDictionary(EN)
 		require.NoError(t, err)
 
 		dict.Inc(42, 5)
@@ -127,11 +126,10 @@ func Test_Dictionary_Find(t *testing.T) {
 	t.Run("must stop after the same letter set", func(t *testing.T) {
 		t.Parallel()
 
-		// "oragne" uses the same letters as "orange", so the search returns before
-		// flipping bits. "green" is within two flips and would show up otherwise.
+		// "oragne" has the same letters as "orange", so the search stops before finding "green".
 		dict := mustDictionary(t, "orange", "green")
 
-		require.Equal(t, []Match{{Value: "orange", Score: 1}}, dict.Find("oragne", 5, 2, acceptAll))
+		require.Equal(t, []Suggestion{{Value: "orange", Score: 1}}, dict.Find("oragne", 5, 2, acceptAll))
 	})
 
 	t.Run("must find a word that differs by up to max errors", func(t *testing.T) {
@@ -139,20 +137,20 @@ func Test_Dictionary_Find(t *testing.T) {
 
 		dict := mustDictionary(t, "problem")
 
-		require.Equal(t, []Match{{Value: "problem", Score: 1}}, dict.Find("problam", 5, 2, acceptAll))
+		require.Equal(t, []Suggestion{{Value: "problem", Score: 1}}, dict.Find("problam", 5, 2, acceptAll))
 		require.Empty(t, dict.Find("problam", 5, 1, acceptAll))
 	})
 
 	t.Run("must rank by score and keep only the requested number", func(t *testing.T) {
 		t.Parallel()
 
-		dict, err := New(alphabet.EN)
+		dict, err := newDictionary(EN)
 		require.NoError(t, err)
 
 		dict.Add("ab", 1)
 		dict.Add("ba", 3)
 
-		require.Equal(t, []Match{{Value: "ba", Score: 3}}, dict.Find("ab", 1, 2, acceptAll))
+		require.Equal(t, []Suggestion{{Value: "ba", Score: 3}}, dict.Find("ab", 1, 2, acceptAll))
 	})
 
 	t.Run("must skip candidates rejected by the filter", func(t *testing.T) {
@@ -187,7 +185,7 @@ func Test_Dictionary_MarshalBinary(t *testing.T) {
 		data, err := dict.MarshalBinary()
 		require.NoError(t, err)
 
-		loaded := &Dictionary{}
+		loaded := &dictionary{}
 		require.NoError(t, loaded.UnmarshalBinary(data))
 
 		require.Equal(t, dict.ids, loaded.ids)
@@ -209,7 +207,7 @@ func Test_Dictionary_MarshalBinary(t *testing.T) {
 		data, err := dict.MarshalBinary()
 		require.NoError(t, err)
 
-		loaded := &Dictionary{}
+		loaded := &dictionary{}
 		require.NoError(t, loaded.UnmarshalBinary(data))
 
 		require.True(t, loaded.Has("one"))
@@ -221,15 +219,15 @@ func Test_Dictionary_MarshalBinary(t *testing.T) {
 	t.Run("must return an error for malformed data", func(t *testing.T) {
 		t.Parallel()
 
-		dict := &Dictionary{}
+		dict := &dictionary{}
 		require.Error(t, dict.UnmarshalBinary([]byte("not a dictionary")))
 	})
 }
 
-func mustDictionary(t *testing.T, words ...string) *Dictionary {
+func mustDictionary(t *testing.T, words ...string) *dictionary {
 	t.Helper()
 
-	dict, err := New(alphabet.EN)
+	dict, err := newDictionary(EN)
 	require.NoError(t, err)
 
 	for _, word := range words {

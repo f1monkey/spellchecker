@@ -5,7 +5,6 @@ import (
 	"path"
 	"testing"
 
-	"github.com/f1monkey/spellchecker/v4/internal/alphabet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,7 +12,7 @@ import (
 func Test_NewSpellchecker(t *testing.T) {
 	t.Parallel()
 
-	s, err := New(alphabet.EN)
+	s, err := New(EN)
 	require.NoError(t, err)
 	require.NotNil(t, s.dict)
 }
@@ -105,7 +104,7 @@ func Test_Spellchecker_Save(t *testing.T) {
 
 	m1 := newSampleSpellchecker(t)
 
-	filePath := path.Join(t.TempDir(), "spellchecker.bin")
+	filePath := path.Join(t.TempDir(), "bin")
 	file, err := os.Create(filePath)
 	require.NoError(t, err)
 	err = m1.Save(file)
@@ -139,6 +138,7 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 		s := newSampleSpellchecker(t)
 		result := s.Suggest("arang", 5)
 		require.Equal(t, SuggestionResult{
+			Mistakes: MistakeTypo,
 			Suggestions: []Suggestion{
 				{Value: "orange", Score: 0.2772588722239781},
 				{Value: "range", Score: 0.13862943611198905},
@@ -152,6 +152,7 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 		s := newSampleSpellchecker(t)
 		result := s.Suggest("rang", 5, WithMaxErrors(1))
 		require.Equal(t, SuggestionResult{
+			Mistakes: MistakeTypo,
 			Suggestions: []Suggestion{
 				{Value: "range", Score: 1.7545288007923614},
 			},
@@ -159,6 +160,7 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 
 		result = s.Suggest("arang", 5, WithMaxErrors(2))
 		require.Equal(t, SuggestionResult{
+			Mistakes: MistakeTypo,
 			Suggestions: []Suggestion{
 				{Value: "orange", Score: 0.2772588722239781},
 				{Value: "range", Score: 0.13862943611198905},
@@ -171,7 +173,7 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 
 		s := newSampleSpellchecker(t)
 		result := s.Suggest("orange", 5)
-		require.Equal(t, SuggestionResult{ExactMatch: true}, result)
+		require.Equal(t, SuggestionResult{Mistakes: NoMistake}, result)
 	})
 
 	t.Run("unknown word", func(t *testing.T) {
@@ -179,6 +181,6 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 
 		s := newSampleSpellchecker(t)
 		result := s.Suggest("qwerty", 5)
-		require.Equal(t, SuggestionResult{Suggestions: []Suggestion{}}, result)
+		require.Equal(t, SuggestionResult{Mistakes: MistakeUnknownWord}, result)
 	})
 }

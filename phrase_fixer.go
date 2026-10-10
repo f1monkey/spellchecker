@@ -1,85 +1,58 @@
 package spellchecker
 
-type spellchecker interface {
+type suggester interface {
 	Suggest(word string, n int, opts ...OptionFunc) SuggestionResult
 	AddWeight(weight uint, words ...string)
 }
 
-// Mistake is a bit set of mistakes found in a segment or fixed by a suggestion.
-// A single segment may contain several mistakes at once,
-// e.g. a wrong keyboard layout and a typo.
-type Mistake int
-
-// NoMistake means the segment is correct.
-const NoMistake Mistake = 0
-
-const (
-	// MistakeTypo is a misspelled word (insertion, deletion, substitution or transposition).
-	MistakeTypo Mistake = 1 << iota
-	// MistakeUnknownWord is a word that is not in the dictionary and has no fix suggestions.
-	// It is never set together with other mistakes.
-	MistakeUnknownWord
-)
-
-// Has reports whether m contains any of the mistakes in x.
-// Has(NoMistake) is always false; compare with NoMistake to check for a correct segment.
-func (m Mistake) Has(x Mistake) bool { return m&x != 0 }
-
-// Segment is a part of the input phrase: either a correct word or a fragment that needs fixing.
-// Start and End are byte offsets in the input phrase, End is exclusive,
-// so phrase[Start:End] is the segment text.
-// For example, if "ghbdtn" at the beginning of the phrase is replaced with "привет",
-// then Start is 0 and End is 6; for "руддщ" replaced with "hello" End is 10.
+// Segment is a part of the phrase: a correct word or a fragment to fix.
+// Start and End are byte offsets in the phrase.
 type Segment struct {
 	Start int
 	End   int
-	// Suggestions are fix candidates ordered from best to worst. Empty for correct segments.
-	Suggestions []FixSuggestion
-	// Mistakes is a union of Mistakes of all Suggestions, or MistakeUnknownWord if there are none.
-	// NoMistake for correct segments.
-	Mistakes Mistake
-}
-
-// FixSuggestion is a fix candidate for a segment.
-type FixSuggestion struct {
-	Suggestion
-	// Mistakes is a set of mistakes fixed by this suggestion.
+	// Suggestions are fix candidates, best first.
+	Suggestions []Suggestion
+	// Mistakes are mistakes found in the segment.
 	Mistakes Mistake
 }
 
 // PhraseFixResult is the result of PhraseFixer.Fix.
 type PhraseFixResult struct {
-	// Segments cover the whole input phrase in order.
+	// Segments are in phrase order.
 	Segments []Segment
 }
 
-// PhraseFixer fixes phrases: in addition to word typos it handles
-// missing and extra spaces and wrong keyboard layout.
-// It uses Spellchecker to look up and fix individual words.
-type PhraseFixer struct {
-	spellchecker spellchecker
-	tokenizer    Tokenizer
+// segmentFixer fixes segments of the phrase found by PhraseFixer.
+type segmentFixer interface {
+	Fix(phrase string, segments []Segment, n int, opts ...OptionFunc) []Segment
 }
 
-// NewPhraseFixer creates a PhraseFixer that uses the given spellchecker for word lookup.
+// PhraseFixer fixes typos and wrong keyboard layout in phrases.
+type PhraseFixer struct {
+	spellchecker suggester
+	tokenizer    Tokenizer
+	fixer        segmentFixer
+}
+
+// NewPhraseFixer creates a PhraseFixer. fixer may be nil.
 func NewPhraseFixer(
-	spellchecker spellchecker,
+	spellchecker suggester,
 	tokenizer Tokenizer,
+	fixer segmentFixer,
 ) *PhraseFixer {
 	return &PhraseFixer{
 		spellchecker: spellchecker,
 		tokenizer:    tokenizer,
+		fixer:        fixer,
 	}
 }
 
-// AddPhrases tokenizes each phrase with the spellchecker's tokenizer and adds
-// the resulting words with weight 1.
+// AddPhrases adds words of the phrases with weight 1.
 func (f *PhraseFixer) AddPhrases(phrases ...string) {
 	f.AddPhraseWeight(1, phrases...)
 }
 
-// AddPhraseWeight is like AddPhrases, but each token is added with the given
-// weight.
+// AddPhraseWeight adds words of the phrases with the given weight.
 func (f *PhraseFixer) AddPhraseWeight(weight uint, phrases ...string) {
 	for _, phrase := range phrases {
 		for _, token := range f.tokenizer.Tokenize(phrase) {
@@ -88,7 +61,7 @@ func (f *PhraseFixer) AddPhraseWeight(weight uint, phrases ...string) {
 	}
 }
 
-// Fix splits the phrase into segments and finds mistakes and fix suggestions for each of them.
+// Fix splits the phrase into segments, finds mistakes in them and passes them to the fixer.
 func (f *PhraseFixer) Fix(phrase string, n int, opts ...OptionFunc) PhraseFixResult {
 	tokens := f.tokenizer.Tokenize(phrase)
 	if len(tokens) == 0 {
@@ -98,32 +71,18 @@ func (f *PhraseFixer) Fix(phrase string, n int, opts ...OptionFunc) PhraseFixRes
 	segments := make([]Segment, 0, len(tokens))
 
 	for _, token := range tokens {
-		suggestions := f.spellchecker.Suggest(token.Text, n, opts...)
+		suggestionResult := f.spellchecker.Suggest(token.Text, n, opts...)
 
-		segment := Segment{
-			Start:    token.Start,
-			End:      token.End,
-			Mistakes: NoMistake,
-		}
+		segments = append(segments, Segment{
+			Start:       token.Start,
+			End:         token.End,
+			Suggestions: suggestionResult.Suggestions,
+			Mistakes:    suggestionResult.Mistakes,
+		})
+	}
 
-		if !suggestions.ExactMatch {
-			if len(suggestions.Suggestions) > 0 {
-				fixes := make([]FixSuggestion, 0, len(suggestions.Suggestions))
-				for _, s := range suggestions.Suggestions {
-					fixes = append(fixes, FixSuggestion{
-						Mistakes:   MistakeTypo,
-						Suggestion: s,
-					})
-				}
-
-				segment.Suggestions = fixes
-				segment.Mistakes = fixes[0].Mistakes
-			} else {
-				segment.Mistakes = MistakeUnknownWord
-			}
-		}
-
-		segments = append(segments, segment)
+	if f.fixer != nil {
+		segments = f.fixer.Fix(phrase, segments, n, opts...)
 	}
 
 	return PhraseFixResult{

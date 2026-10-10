@@ -1,10 +1,10 @@
 package spellchecker
 
-import "regexp"
+import (
+	"regexp"
+)
 
-// Token is a fragment of the tokenized input.
-// Start and End are byte offsets in the input, End is exclusive,
-// so input[Start:End] == Text.
+// Token is a fragment of the input. Start and End are byte offsets in the input.
 type Token struct {
 	Text  string
 	Start int
@@ -16,14 +16,12 @@ type Tokenizer interface {
 }
 
 // NewWhitespaceTokenizer splits on Unicode whitespace, like Elasticsearch whitespace tokenizer.
-func NewWhitespaceTokenizer() *RegexpTokenizer {
+func NewWhitespaceTokenizer() Tokenizer {
 	return NewRegexpTokenizer(regexp.MustCompile(`\S+`))
 }
 
-// NewStandardTokenizer approximates Elasticsearch standard tokenizer (UAX #29):
-// keeps letters, digits, underscores and in-word apostrophes; splits on hyphens
-// and other punctuation.
-func NewStandardTokenizer() *RegexpTokenizer {
+// NewStandardTokenizer approximates Elasticsearch standard tokenizer (UAX #29).
+func NewStandardTokenizer() Tokenizer {
 	return NewRegexpTokenizer(regexp.MustCompile(`[\p{L}\p{N}_'’]+`))
 }
 
@@ -31,8 +29,7 @@ type RegexpTokenizer struct {
 	regexp *regexp.Regexp
 }
 
-// NewRegexpTokenizer returns a tokenizer that emits every non-empty match of regexp as a token.
-// Note that regexp matches tokens, not separators.
+// NewRegexpTokenizer creates a tokenizer that emits regexp matches as tokens.
 func NewRegexpTokenizer(regexp *regexp.Regexp) *RegexpTokenizer {
 	return &RegexpTokenizer{
 		regexp: regexp,

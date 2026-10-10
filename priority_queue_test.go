@@ -1,4 +1,4 @@
-package dictionary
+package spellchecker
 
 import (
 	"testing"
@@ -19,7 +19,7 @@ func Test_priorityQueue(t *testing.T) {
 		pq.Offer(7, []rune("qux"))
 		pq.Offer(3, []rune("quux"))
 
-		require.Equal(t, []Match{
+		require.Equal(t, []Suggestion{
 			{Value: "baz", Score: 10},
 			{Value: "qux", Score: 7},
 			{Value: "foo", Score: 5},
@@ -40,7 +40,7 @@ func Test_priorityQueue(t *testing.T) {
 			pq.Offer(1, []rune("bar"))
 			pq.Offer(10, []rune("baz"))
 
-			require.Equal(t, []Match{
+			require.Equal(t, []Suggestion{
 				{Value: "baz", Score: 10},
 				{Value: "foo", Score: 5},
 			}, pq.DrainSorted())
@@ -54,7 +54,7 @@ func Test_priorityQueue(t *testing.T) {
 			pq.Offer(1, []rune("bar"))
 			pq.Offer(10, []rune("baz"))
 
-			require.Equal(t, []Match{
+			require.Equal(t, []Suggestion{
 				{Value: "baz", Score: 10},
 			}, pq.DrainSorted())
 		})
@@ -67,7 +67,7 @@ func Test_priorityQueue(t *testing.T) {
 		pq.Offer(5, []rune("foo"))
 		pq.Offer(5, []rune("bar"))
 
-		require.Equal(t, []Match{
+		require.Equal(t, []Suggestion{
 			{Value: "bar", Score: 5},
 		}, pq.DrainSorted())
 	})
@@ -81,7 +81,7 @@ func Test_priorityQueue(t *testing.T) {
 		pq.Offer(2, []rune("c"))
 		pq.Offer(9, []rune("d"))
 
-		require.Equal(t, []Match{
+		require.Equal(t, []Suggestion{
 			{Value: "d", Score: 9},
 			{Value: "b", Score: 5},
 			{Value: "c", Score: 2},
