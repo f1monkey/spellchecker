@@ -16,12 +16,12 @@ type Tokenizer interface {
 }
 
 // NewWhitespaceTokenizer splits on Unicode whitespace, like Elasticsearch whitespace tokenizer.
-func NewWhitespaceTokenizer() Tokenizer {
+func NewWhitespaceTokenizer() *RegexpTokenizer {
 	return NewRegexpTokenizer(regexp.MustCompile(`\S+`))
 }
 
 // NewStandardTokenizer approximates Elasticsearch standard tokenizer (UAX #29).
-func NewStandardTokenizer() Tokenizer {
+func NewStandardTokenizer() *RegexpTokenizer {
 	return NewRegexpTokenizer(regexp.MustCompile(`[\p{L}\p{N}_'’]+`))
 }
 

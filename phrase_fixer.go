@@ -1,13 +1,17 @@
 package spellchecker
 
+import "strings"
+
 type suggester interface {
-	Suggest(word string, opts ...OptionFunc) SuggestionResult
+	Suggest(word string, opts ...Option) SuggestionResult
 	AddWeight(weight uint, words ...string)
 }
 
 // Segment is a part of the phrase: a correct word or a fragment to fix.
 // Start and End are byte offsets in the phrase.
 type Segment struct {
+	// Text is the original text of the segment.
+	Text  string
 	Start int
 	End   int
 	// Suggestions are fix candidates, best first.
@@ -25,19 +29,55 @@ type PhraseFixResult struct {
 	Segments []Segment
 }
 
-// Corrector corrects segments of the phrase found by PhraseFixer.
-type Corrector interface {
-	Correct(phrase string, segments []Segment, opts ...OptionFunc) []Segment
+// Apply returns the phrase with each wrong segment replaced by its best suggestion.
+func (r PhraseFixResult) Apply(phrase string) string {
+	var b strings.Builder
+
+	prev := 0
+
+	for _, s := range r.Segments {
+		if s.IsCorrect() || len(s.Suggestions) == 0 {
+			continue
+		}
+
+		if b.Len() == 0 {
+			b.Grow(len(phrase))
+		}
+
+		b.WriteString(phrase[prev:s.Start])
+		b.WriteString(s.Suggestions[0].Value)
+		prev = s.End
+	}
+
+	if prev == 0 {
+		return phrase
+	}
+
+	b.WriteString(phrase[prev:])
+
+	return b.String()
 }
 
-// PhraseFixer fixes typos and wrong keyboard layout in phrases.
+// Phrase is a phrase passed to correctors.
+type Phrase struct {
+	Text string
+	// Tokenizer is the tokenizer of PhraseFixer.
+	Tokenizer Tokenizer
+}
+
+// Corrector corrects segments of the phrase found by PhraseFixer.
+type Corrector interface {
+	Correct(phrase Phrase, segments []Segment, opts ...Option) []Segment
+}
+
+// PhraseFixer fixes mistakes in phrases.
 type PhraseFixer struct {
 	spellchecker suggester
 	tokenizer    Tokenizer
 	correctors   []Corrector
 }
 
-// NewPhraseFixer creates a PhraseFixer. Fixers are applied in the given order.
+// NewPhraseFixer creates a PhraseFixer. Correctors are applied in the given order.
 func NewPhraseFixer(
 	spellchecker suggester,
 	tokenizer Tokenizer,
@@ -50,13 +90,13 @@ func NewPhraseFixer(
 	}
 }
 
-// AddPhrases adds words of the phrases with weight 1.
-func (f *PhraseFixer) AddPhrases(phrases ...string) {
-	f.AddPhraseWeight(1, phrases...)
+// Add adds words of the phrases with weight 1.
+func (f *PhraseFixer) Add(phrases ...string) {
+	f.AddWeight(1, phrases...)
 }
 
-// AddPhraseWeight adds words of the phrases with the given weight.
-func (f *PhraseFixer) AddPhraseWeight(weight uint, phrases ...string) {
+// AddWeight adds words of the phrases with the given weight.
+func (f *PhraseFixer) AddWeight(weight uint, phrases ...string) {
 	for _, phrase := range phrases {
 		for _, token := range f.tokenizer.Tokenize(phrase) {
 			f.spellchecker.AddWeight(weight, token.Text)
@@ -65,7 +105,7 @@ func (f *PhraseFixer) AddPhraseWeight(weight uint, phrases ...string) {
 }
 
 // Fix splits the phrase into segments, finds mistakes in them and passes them through the correctors.
-func (f *PhraseFixer) Fix(phrase string, opts ...OptionFunc) PhraseFixResult {
+func (f *PhraseFixer) Fix(phrase string, opts ...Option) PhraseFixResult {
 	tokens := f.tokenizer.Tokenize(phrase)
 	if len(tokens) == 0 {
 		return PhraseFixResult{}
@@ -77,6 +117,7 @@ func (f *PhraseFixer) Fix(phrase string, opts ...OptionFunc) PhraseFixResult {
 		suggestionResult := f.spellchecker.Suggest(token.Text, opts...)
 
 		segments = append(segments, Segment{
+			Text:        token.Text,
 			Start:       token.Start,
 			End:         token.End,
 			Suggestions: suggestionResult.Suggestions,
@@ -84,8 +125,9 @@ func (f *PhraseFixer) Fix(phrase string, opts ...OptionFunc) PhraseFixResult {
 		})
 	}
 
+	p := Phrase{Text: phrase, Tokenizer: f.tokenizer}
 	for _, corrector := range f.correctors {
-		segments = corrector.Correct(phrase, segments, opts...)
+		segments = corrector.Correct(p, segments, opts...)
 	}
 
 	return PhraseFixResult{

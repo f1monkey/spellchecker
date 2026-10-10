@@ -17,6 +17,15 @@ func Test_NewSpellchecker(t *testing.T) {
 	require.NotNil(t, s.dict)
 }
 
+func Test_Mistake_String(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, "none", NoMistake.String())
+	require.Equal(t, "typo", MistakeTypo.String())
+	require.Equal(t, "typo|layout", (MistakeLayout | MistakeTypo).String())
+	require.Equal(t, "unknown_word|extra_space", (MistakeUnknownWord | MistakeExtraSpace).String())
+}
+
 func Test_SuggestionResult_IsCorrect(t *testing.T) {
 	t.Parallel()
 
@@ -185,6 +194,8 @@ func Test_Spellchecker_Suggest(t *testing.T) {
 
 		require.Len(t, s.Suggest("ab").Suggestions, defaultMaxSuggestions)
 		require.Len(t, s.Suggest("ab", WithMaxSuggestions(3)).Suggestions, 3)
+		require.Len(t, s.Suggest("ab", WithMaxSuggestions(0)).Suggestions, defaultMaxSuggestions)
+		require.Len(t, s.Suggest("ab", WithMaxSuggestions(-1)).Suggestions, defaultMaxSuggestions)
 	})
 
 	t.Run("valid word", func(t *testing.T) {

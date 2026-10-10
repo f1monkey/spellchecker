@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"io"
 	"math"
+	"strings"
 	"sync"
 )
 
@@ -25,32 +26,68 @@ const (
 	MistakeUnknownWord
 	// MistakeLayout is a word typed in a wrong keyboard layout.
 	MistakeLayout
-	// MistakeExtraSpace is a word split by extra spaces.
+	// MistakeExtraSpace is a word split by extra spaces or punctuation.
 	MistakeExtraSpace
 )
+
+var mistakeNames = []struct {
+	mistake Mistake
+	name    string
+}{
+	{MistakeTypo, "typo"},
+	{MistakeUnknownWord, "unknown_word"},
+	{MistakeLayout, "layout"},
+	{MistakeExtraSpace, "extra_space"},
+}
 
 // Has reports whether m contains any of the mistakes in x.
 func (m Mistake) Has(x Mistake) bool { return m&x != 0 }
 
-type OptionFunc func(opts *searchOptions)
+// String returns mistake names joined by "|", e.g. "typo|layout".
+func (m Mistake) String() string {
+	if m == NoMistake {
+		return "none"
+	}
+
+	var b strings.Builder
+
+	for _, n := range mistakeNames {
+		if !m.Has(n.mistake) {
+			continue
+		}
+
+		if b.Len() > 0 {
+			b.WriteByte('|')
+		}
+
+		b.WriteString(n.name)
+		m &^= n.mistake
+	}
+
+	return b.String()
+}
+
+// Option configures Suggest and PhraseFixer.Fix.
+type Option func(opts *searchOptions)
 
 // WithMaxErrors sets the max allowed edit distance to a dictionary word.
 // Values greater than 2 significantly affect performance.
-func WithMaxErrors(maxErrors int) OptionFunc {
+func WithMaxErrors(maxErrors int) Option {
 	return func(opts *searchOptions) {
 		opts.maxErrors = maxErrors
 	}
 }
 
-// WithMaxSuggestions sets the max number of suggestions for a word. Default is 10.
-func WithMaxSuggestions(n int) OptionFunc {
+// WithMaxSuggestions sets the max number of suggestions for a word.
+// Default is 10, it is also used for n <= 0.
+func WithMaxSuggestions(n int) Option {
 	return func(opts *searchOptions) {
 		opts.maxSuggestions = n
 	}
 }
 
 // WithScoringFunc set a ScoringFunc
-func WithScoringFunc(f ScoringFunc) OptionFunc {
+func WithScoringFunc(f ScoringFunc) Option {
 	return func(opts *searchOptions) {
 		opts.scoringFunc = f
 	}
@@ -76,7 +113,7 @@ func New(alphabets ...Alphabet) (*Spellchecker, error) {
 	return result, nil
 }
 
-// IsCorrect check if provided word is in the dictionary
+// IsCorrect reports whether the word is in the dictionary.
 func (s *Spellchecker) IsCorrect(word string) bool {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
@@ -121,7 +158,7 @@ type SuggestionResult struct {
 func (r SuggestionResult) IsCorrect() bool { return r.Mistakes == NoMistake }
 
 // Suggest returns fix suggestions for the word.
-func (s *Spellchecker) Suggest(word string, opts ...OptionFunc) SuggestionResult {
+func (s *Spellchecker) Suggest(word string, opts ...Option) SuggestionResult {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 
@@ -142,6 +179,10 @@ func (s *Spellchecker) Suggest(word string, opts ...OptionFunc) SuggestionResult
 		searchOpts.scoringFunc = defaultScoringFunc
 	}
 
+	if searchOpts.maxSuggestions <= 0 {
+		searchOpts.maxSuggestions = defaultMaxSuggestions
+	}
+
 	matches := s.dict.Find(word, searchOpts.maxSuggestions, searchOpts.maxErrors, searchOpts.scoringFunc)
 	if len(matches) == 0 {
 		return SuggestionResult{Mistakes: MistakeUnknownWord}
@@ -158,13 +199,13 @@ type spellcheckerData struct {
 }
 
 // Save encodes spellchecker data and writes it to the provided writer
-func (m *Spellchecker) Save(w io.Writer) error {
-	m.mtx.RLock()
-	defer m.mtx.RUnlock()
+func (s *Spellchecker) Save(w io.Writer) error {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
 
 	//nolint:forcetypeassert
 	data := spellcheckerData{
-		Dict: m.dict,
+		Dict: s.dict,
 	}
 
 	return gob.NewEncoder(w).Encode(data)

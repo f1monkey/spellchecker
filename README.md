@@ -9,6 +9,11 @@ Yet another spellchecker written in go.
   - [Features:](#features)
   - [Installation](#installation)
   - [Usage](#usage)
+    - [Quick start](#quick-start)
+    - [Options](#options)
+    - [Phrases](#phrases)
+    - [Tokenizers](#tokenizers)
+    - [Save/load](#saveload)
   - [Benchmarks](#benchmarks)
     - [Test set 1:](#test-set-1)
     - [Test set 2:](#test-set-2)
@@ -110,28 +115,50 @@ result := sc.Suggest(
 `PhraseFixer` splits a phrase into segments with a tokenizer and checks each word. Correctors fix more mistakes, they are applied in the given order:
 
 - `NewExtraSpaceCorrector(sc, maxJoin)` joins words split by spaces or punctuation: "hel lo" → "hello".
-- `NewLayoutCorrector(spellchecker.QwertyRuEn, sc, tokenizer)` fixes words typed in a wrong keyboard layout: "ghbdtn" → "привет". The tokenizer must be the same as in `PhraseFixer`.
+- `NewLayoutCorrector(spellchecker.QwertyRuEn(), sc)` fixes words typed in a wrong keyboard layout: "ghbdtn" → "привет".
 
 ```go
-	tok := spellchecker.NewStandardTokenizer()
-	f := spellchecker.NewPhraseFixer(sc, tok,
+	sc, err := spellchecker.New(spellchecker.EN, spellchecker.RU)
+	if err != nil {
+		panic(err)
+	}
+
+	f := spellchecker.NewPhraseFixer(sc, spellchecker.NewStandardTokenizer(),
 		spellchecker.NewExtraSpaceCorrector(sc, 3),
-		spellchecker.NewLayoutCorrector(spellchecker.QwertyRuEn, sc, tok),
+		spellchecker.NewLayoutCorrector(spellchecker.QwertyRuEn(), sc),
 	)
 
-	result := f.Fix("hel lo ghbdtn", spellchecker.WithMaxSuggestions(3))
+	f.Add("hello world привет") // adds words of the phrases to the spellchecker
+
+	phrase := "hel lo ghbdtn"
+	result := f.Fix(phrase, spellchecker.WithMaxSuggestions(3))
+	fmt.Println(result.Apply(phrase)) // "hello привет"
+
 	for _, s := range result.Segments {
-		// s.Start and s.End are byte offsets in the phrase
-		fmt.Println(s.Start, s.End, s.Mistakes, s.Suggestions)
+		// s.Start and s.End are byte offsets in the phrase, s.Text is phrase[s.Start:s.End]
+		fmt.Println(s.Text, s.Mistakes, s.Suggestions)
+		// hel lo extra_space [{hello 0}]
+		// ghbdtn layout [{привет 0}]
 	}
 ```
 
-You can also implement the `Corrector` interface.
+`Apply` replaces each wrong segment with its first suggestion. Segments without suggestions (unknown words) are kept.
+
+You can also implement the `Corrector` interface. `Correct` receives a `Phrase` with the phrase text and the `PhraseFixer` tokenizer.
+
+### Tokenizers
+
+Tokenizers are used by `PhraseFixer`.
+
+- `NewWhitespaceTokenizer` splits on Unicode whitespace (like Elasticsearch `whitespace`).
+- `NewStandardTokenizer` approximates Elasticsearch `standard`: it keeps letters, digits, underscores and in-word apostrophes, and splits on hyphens and other punctuation.
+- `NewRegexpTokenizer` - splits strings using the provided regular expression
+- You can also implement the `Tokenizer` interface
 
 ### Save/load
 
 ```go
-	sc, err := spellchecker.New(tok, "abc")
+	sc, err := spellchecker.New(spellchecker.EN)
 
 	// Save data to any io.Writer
 	out, err := os.Create("data/out.bin")
@@ -150,13 +177,6 @@ You can also implement the `Corrector` interface.
 		panic(err)
 	}
 ```
-
-## Tokenizers
-
-- `NewWhitespaceTokenizer` splits on Unicode whitespace (like Elasticsearch `whitespace`).
-- `NewStandardTokenizer` approximates Elasticsearch `standard`: it keeps letters, digits, underscores and in-word apostrophes, and splits on hyphens and other punctuation.
-- `NewRegexpTokenizer` - splits strings using the provided regular expression
-- You can also implement `Tokenizer` inteface
 
 ## Benchmarks
 
