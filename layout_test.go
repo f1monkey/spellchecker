@@ -60,7 +60,7 @@ func Test_QwertyRuEn(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			require.Equal(t, tt.want, QwertyRuEn.Replace(tt.input))
+			require.Equal(t, tt.want, QwertyRuEn().Replace(tt.input))
 		})
 	}
 
@@ -68,19 +68,28 @@ func Test_QwertyRuEn(t *testing.T) {
 		t.Parallel()
 
 		for _, s := range []string{"ghbdtn", "Объединение", "{jhjij", "`~;:'\",.<>[]{}"} {
-			require.Equal(t, s, QwertyRuEn.Replace(QwertyRuEn.Replace(s)))
+			require.Equal(t, s, QwertyRuEn().Replace(QwertyRuEn().Replace(s)))
 		}
+	})
+
+	t.Run("returns a copy", func(t *testing.T) {
+		t.Parallel()
+
+		r := QwertyRuEn()
+		r['q'] = 'q'
+
+		require.Equal(t, "й", QwertyRuEn().Replace("q"))
 	})
 
 	// t.Run("replaces each rune with one rune", func(t *testing.T) {
 	// 	t.Parallel()
 
-	// 	_, ok := sourceOffsets("j,]tv `krf", QwertyRuEn.Replace("j,]tv `krf"))
+	// 	_, ok := sourceOffsets("j,]tv `krf", QwertyRuEn().Replace("j,]tv `krf"))
 	// 	require.True(t, ok)
 	// })
 }
 
-func Test_LayoutFixer_Fix(t *testing.T) {
+func Test_LayoutCorrector_Correct(t *testing.T) {
 	t.Parallel()
 
 	typo := func(values ...string) SuggestionResult {
@@ -265,42 +274,42 @@ func Test_LayoutFixer_Fix(t *testing.T) {
 			t.Parallel()
 
 			sc := &spellcheckerMock{results: tt.results}
-			f := NewPhraseFixer(sc, NewStandardTokenizer(), NewLayoutFixer(QwertyRuEn, sc, NewStandardTokenizer()))
+			f := NewPhraseFixer(sc, NewStandardTokenizer(), NewLayoutCorrector(QwertyRuEn()))
 
-			require.Equal(t, tt.want, segmentViews(t, tt.phrase, f.Fix(tt.phrase, 3)))
+			require.Equal(t, tt.want, segmentViews(t, tt.phrase, f.Fix(tt.phrase, WithMaxSuggestions(3))))
 		})
 	}
 
 	t.Run("segment offsets are in bytes of the phrase", func(t *testing.T) {
 		t.Parallel()
 
-		f := NewLayoutFixer(QwertyRuEn, &spellcheckerMock{}, NewStandardTokenizer())
+		f := NewLayoutCorrector(QwertyRuEn())
 
-		got := f.fixChunk("ok руддщбцщкдв", 3, 25, MistakeUnknownWord, 3)
+		got := f.correctChunk(CorrectInput{Phrase: "ok руддщбцщкдв", Tokenizer: NewStandardTokenizer(), Spellchecker: &spellcheckerMock{}}, 3, 25, MistakeUnknownWord)
 		require.Equal(t, []Segment{
-			{Start: 3, End: 13, Suggestions: []Suggestion{{Value: "hello"}}, Mistakes: MistakeLayout},
-			{Start: 13, End: 15, Suggestions: []Suggestion{{Value: ","}}, Mistakes: MistakeLayout},
-			{Start: 15, End: 25, Suggestions: []Suggestion{{Value: "world"}}, Mistakes: MistakeLayout},
+			{Text: "руддщ", Start: 3, End: 13, Suggestions: []Suggestion{{Value: "hello"}}, Mistakes: MistakeLayout},
+			{Text: "б", Start: 13, End: 15, Suggestions: []Suggestion{{Value: ","}}, Mistakes: MistakeLayout},
+			{Text: "цщкдв", Start: 15, End: 25, Suggestions: []Suggestion{{Value: "world"}}, Mistakes: MistakeLayout},
 		}, got)
 	})
 
 	t.Run("segments crossing whitespace are kept", func(t *testing.T) {
 		t.Parallel()
 
-		f := NewLayoutFixer(QwertyRuEn, &spellcheckerMock{}, NewStandardTokenizer())
+		f := NewLayoutCorrector(QwertyRuEn())
 		segments := []Segment{
-			{Start: 0, End: 10, Mistakes: MistakeUnknownWord},
-			{Start: 11, End: 17, Mistakes: MistakeUnknownWord},
+			{Text: "ghbdtn vbh", Start: 0, End: 10, Mistakes: MistakeUnknownWord},
+			{Text: "ghbdtn", Start: 11, End: 17, Mistakes: MistakeUnknownWord},
 		}
 
 		require.Equal(t, []Segment{
-			{Start: 0, End: 10, Mistakes: MistakeUnknownWord},
-			{Start: 11, End: 17, Suggestions: []Suggestion{{Value: "привет"}}, Mistakes: MistakeLayout},
-		}, f.Fix("ghbdtn vbh ghbdtn", segments, 3))
+			{Text: "ghbdtn vbh", Start: 0, End: 10, Mistakes: MistakeUnknownWord},
+			{Text: "ghbdtn", Start: 11, End: 17, Suggestions: []Suggestion{{Value: "привет"}}, Mistakes: MistakeLayout},
+		}, f.Correct(CorrectInput{Phrase: "ghbdtn vbh ghbdtn", Tokenizer: NewStandardTokenizer(), Spellchecker: &spellcheckerMock{}}, segments))
 	})
 }
 
-func Test_LayoutFixer_Fix_Integration(t *testing.T) {
+func Test_LayoutCorrector_Correct_Integration(t *testing.T) {
 	t.Parallel()
 
 	s, err := New(EN, RU)
@@ -308,7 +317,7 @@ func Test_LayoutFixer_Fix_Integration(t *testing.T) {
 	s.Add("hello", "world", "привет", "мир", "объем")
 
 	phrase := "ghbdtn мир руддщбцщкдв ghbdtnn qwzx j,]tv"
-	f := NewPhraseFixer(s, NewStandardTokenizer(), NewLayoutFixer(QwertyRuEn, s, NewStandardTokenizer()))
+	f := NewPhraseFixer(s, NewStandardTokenizer(), NewLayoutCorrector(QwertyRuEn()))
 
 	require.Equal(t, []segmentView{
 		{Text: "ghbdtn", Suggestions: []string{"привет"}, Mistakes: MistakeLayout},
@@ -319,5 +328,5 @@ func Test_LayoutFixer_Fix_Integration(t *testing.T) {
 		{Text: "ghbdtnn", Suggestions: []string{"привет"}, Mistakes: MistakeLayout | MistakeTypo},
 		{Text: "qwzx", Mistakes: MistakeUnknownWord},
 		{Text: "j,]tv", Suggestions: []string{"объем"}, Mistakes: MistakeLayout},
-	}, segmentViews(t, phrase, f.Fix(phrase, 3)))
+	}, segmentViews(t, phrase, f.Fix(phrase, WithMaxSuggestions(3))))
 }

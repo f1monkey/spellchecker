@@ -11,40 +11,76 @@ func Test_NewPhraseFixer(t *testing.T) {
 
 	sc := &spellcheckerMock{}
 	tok := NewWhitespaceTokenizer()
-	lf := NewLayoutFixer(QwertyRuEn, sc, tok)
+	lf := NewLayoutCorrector(QwertyRuEn())
+	other := &correctorMock{}
 
-	f := NewPhraseFixer(sc, tok, lf)
+	f := NewPhraseFixer(sc, tok, lf, other)
 	require.Same(t, sc, f.spellchecker)
 	require.Same(t, tok, f.tokenizer)
-	require.Same(t, lf, f.fixer)
+	require.Len(t, f.correctors, 2)
+	require.Same(t, lf, f.correctors[0])
+	require.Same(t, other, f.correctors[1])
+
+	require.Nil(t, NewPhraseFixer(sc, tok).correctors)
 }
 
-func Test_PhraseFixer_Fix_Fixer(t *testing.T) {
+func Test_Segment_IsCorrect(t *testing.T) {
 	t.Parallel()
 
-	sc := &spellcheckerMock{results: map[string]SuggestionResult{"helo": {Mistakes: MistakeTypo}}}
-	fixer := &segmentFixerMock{results: map[string][]Segment{
-		"hello world": {{Start: 0, End: 11, Mistakes: MistakeLayout}},
-	}}
-	f := NewPhraseFixer(sc, NewWhitespaceTokenizer(), fixer)
+	require.True(t, Segment{}.IsCorrect())
+	require.False(t, Segment{Mistakes: MistakeTypo}.IsCorrect())
+	require.False(t, Segment{Mistakes: MistakeLayout | MistakeExtraSpace}.IsCorrect())
+}
+
+func Test_PhraseFixResult_Apply(t *testing.T) {
+	t.Parallel()
 
 	tests := []struct {
-		name   string
-		phrase string
-		want   []Segment
+		name     string
+		phrase   string
+		segments []Segment
+		want     string
 	}{
 		{
-			name:   "segments are passed to the fixer",
-			phrase: "helo world",
-			want: []Segment{
-				{Start: 0, End: 4, Mistakes: MistakeTypo},
-				{Start: 5, End: 10, Mistakes: NoMistake},
-			},
+			name:   "no segments",
+			phrase: "hello",
+			want:   "hello",
 		},
 		{
-			name:   "fixer result is returned",
+			name:   "correct segments are kept",
 			phrase: "hello world",
-			want:   []Segment{{Start: 0, End: 11, Mistakes: MistakeLayout}},
+			segments: []Segment{
+				{Text: "hello", Start: 0, End: 5},
+				{Text: "world", Start: 6, End: 11},
+			},
+			want: "hello world",
+		},
+		{
+			name:   "wrong segments are replaced by the best suggestion",
+			phrase: "helo, ghbdtn!",
+			segments: []Segment{
+				{Text: "helo", Start: 0, End: 4, Mistakes: MistakeTypo, Suggestions: []Suggestion{{Value: "hello"}, {Value: "help"}}},
+				{Text: "ghbdtn", Start: 6, End: 12, Mistakes: MistakeLayout, Suggestions: []Suggestion{{Value: "привет"}}},
+			},
+			want: "hello, привет!",
+		},
+		{
+			name:   "segments without suggestions are kept",
+			phrase: "qwzx helo",
+			segments: []Segment{
+				{Text: "qwzx", Start: 0, End: 4, Mistakes: MistakeUnknownWord},
+				{Text: "helo", Start: 5, End: 9, Mistakes: MistakeTypo, Suggestions: []Suggestion{{Value: "hello"}}},
+			},
+			want: "qwzx hello",
+		},
+		{
+			name:   "joined segment",
+			phrase: "hel lo world",
+			segments: []Segment{
+				{Text: "hel lo", Start: 0, End: 6, Mistakes: MistakeExtraSpace, Suggestions: []Suggestion{{Value: "hello"}}},
+				{Text: "world", Start: 7, End: 12},
+			},
+			want: "hello world",
 		},
 	}
 
@@ -52,18 +88,64 @@ func Test_PhraseFixer_Fix_Fixer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			require.Equal(t, PhraseFixResult{Segments: tt.want}, f.Fix(tt.phrase, 3))
+			require.Equal(t, tt.want, PhraseFixResult{Segments: tt.segments}.Apply(tt.phrase))
 		})
 	}
 }
 
-func Test_PhraseFixer_AddPhrases(t *testing.T) {
+func Test_PhraseFixer_Fix_Correctors(t *testing.T) {
+	t.Parallel()
+
+	segments := []Segment{
+		{Text: "helo", Start: 0, End: 4, Mistakes: MistakeTypo},
+		{Text: "world", Start: 5, End: 10, Mistakes: NoMistake},
+	}
+	first := Segment{Text: "helo world", Start: 0, End: 10, Mistakes: MistakeLayout}
+	second := Segment{Text: "world", Start: 5, End: 10, Mistakes: MistakeUnknownWord}
+
+	tests := []struct {
+		name       string
+		correctors []Corrector
+		want       []Segment
+	}{
+		{
+			name: "no correctors",
+			want: segments,
+		},
+		{
+			name:       "one corrector",
+			correctors: []Corrector{&correctorMock{add: []Segment{first}}},
+			want:       append(append([]Segment{}, segments...), first),
+		},
+		{
+			name: "correctors are chained in order",
+			correctors: []Corrector{
+				&correctorMock{add: []Segment{first}},
+				&correctorMock{add: []Segment{second}},
+			},
+			want: append(append([]Segment{}, segments...), first, second),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			sc := &spellcheckerMock{results: map[string]SuggestionResult{"helo": {Mistakes: MistakeTypo}}}
+			f := NewPhraseFixer(sc, NewWhitespaceTokenizer(), tt.correctors...)
+
+			require.Equal(t, PhraseFixResult{Segments: tt.want}, f.Fix("helo world", WithMaxSuggestions(3)))
+		})
+	}
+}
+
+func Test_PhraseFixer_Add(t *testing.T) {
 	t.Parallel()
 
 	sc := &spellcheckerMock{}
-	f := NewPhraseFixer(sc, NewStandardTokenizer(), nil)
+	f := NewPhraseFixer(sc, NewStandardTokenizer())
 
-	f.AddPhrases("hello, world", "", "папа-кот", "hello")
+	f.Add("hello, world", "", "папа-кот", "hello")
 
 	require.Equal(t, map[string]uint{
 		"hello": 2,
@@ -73,13 +155,13 @@ func Test_PhraseFixer_AddPhrases(t *testing.T) {
 	}, sc.weights)
 }
 
-func Test_PhraseFixer_AddPhraseWeight(t *testing.T) {
+func Test_PhraseFixer_AddWeight(t *testing.T) {
 	t.Parallel()
 
 	sc := &spellcheckerMock{}
-	f := NewPhraseFixer(sc, NewWhitespaceTokenizer(), nil)
+	f := NewPhraseFixer(sc, NewWhitespaceTokenizer())
 
-	f.AddPhraseWeight(5, "foo bar")
+	f.AddWeight(5, "foo bar")
 
 	require.Equal(t, map[string]uint{
 		"foo": 5,
@@ -109,8 +191,8 @@ func Test_PhraseFixer_Fix(t *testing.T) {
 			},
 			phrase: "hello world",
 			want: PhraseFixResult{Segments: []Segment{
-				{Start: 0, End: 5, Mistakes: NoMistake},
-				{Start: 6, End: 11, Mistakes: NoMistake},
+				{Text: "hello", Start: 0, End: 5, Mistakes: NoMistake},
+				{Text: "world", Start: 6, End: 11, Mistakes: NoMistake},
 			}},
 		},
 		{
@@ -125,12 +207,13 @@ func Test_PhraseFixer_Fix(t *testing.T) {
 			phrase: "helo world",
 			want: PhraseFixResult{Segments: []Segment{
 				{
+					Text:        "helo",
 					Start:       0,
 					End:         4,
 					Suggestions: []Suggestion{{Value: "hello", Score: 2}, {Value: "help", Score: 1}},
 					Mistakes:    MistakeTypo,
 				},
-				{Start: 5, End: 10, Mistakes: NoMistake},
+				{Text: "world", Start: 5, End: 10, Mistakes: NoMistake},
 			}},
 		},
 		{
@@ -140,7 +223,7 @@ func Test_PhraseFixer_Fix(t *testing.T) {
 			},
 			phrase: "qwzx",
 			want: PhraseFixResult{Segments: []Segment{
-				{Start: 0, End: 4, Mistakes: MistakeUnknownWord},
+				{Text: "qwzx", Start: 0, End: 4, Mistakes: MistakeUnknownWord},
 			}},
 		},
 		{
@@ -151,8 +234,8 @@ func Test_PhraseFixer_Fix(t *testing.T) {
 			},
 			phrase: "  привет \t мир ",
 			want: PhraseFixResult{Segments: []Segment{
-				{Start: 2, End: 14, Mistakes: NoMistake},
-				{Start: 17, End: 23, Mistakes: NoMistake},
+				{Text: "привет", Start: 2, End: 14, Mistakes: NoMistake},
+				{Text: "мир", Start: 17, End: 23, Mistakes: NoMistake},
 			}},
 		},
 	}
@@ -161,14 +244,13 @@ func Test_PhraseFixer_Fix(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			f := NewPhraseFixer(&spellcheckerMock{results: tt.results}, NewWhitespaceTokenizer(), nil)
+			f := NewPhraseFixer(&spellcheckerMock{results: tt.results}, NewWhitespaceTokenizer())
 
-			got := f.Fix(tt.phrase, 3)
+			got := f.Fix(tt.phrase, WithMaxSuggestions(3))
 			require.Equal(t, tt.want, got)
 
 			for _, s := range got.Segments {
-				require.LessOrEqual(t, s.Start, s.End)
-				require.LessOrEqual(t, s.End, len(tt.phrase))
+				require.Equal(t, tt.phrase[s.Start:s.End], s.Text)
 			}
 		})
 	}
@@ -181,22 +263,19 @@ func Test_PhraseFixer_Fix_Integration(t *testing.T) {
 		name      string
 		tokenizer Tokenizer
 		phrase    string
-		n         int
-		opts      []OptionFunc
+		opts      []Option
 		want      []segmentView
 	}{
 		{
 			name:      "empty phrase",
 			tokenizer: NewWhitespaceTokenizer(),
 			phrase:    "",
-			n:         5,
 			want:      []segmentView{},
 		},
 		{
 			name:      "correct phrase",
 			tokenizer: NewWhitespaceTokenizer(),
 			phrase:    "green tea",
-			n:         5,
 			want: []segmentView{
 				{Text: "green", Mistakes: NoMistake},
 				{Text: "tea", Mistakes: NoMistake},
@@ -206,16 +285,15 @@ func Test_PhraseFixer_Fix_Integration(t *testing.T) {
 			name:      "typo",
 			tokenizer: NewWhitespaceTokenizer(),
 			phrase:    "arang",
-			n:         5,
 			want: []segmentView{
 				{Text: "arang", Suggestions: []string{"orange", "range"}, Mistakes: MistakeTypo},
 			},
 		},
 		{
-			name:      "n limits suggestions",
+			name:      "max suggestions limits suggestions",
 			tokenizer: NewWhitespaceTokenizer(),
 			phrase:    "arang",
-			n:         1,
+			opts:      []Option{WithMaxSuggestions(1)},
 			want: []segmentView{
 				{Text: "arang", Suggestions: []string{"orange"}, Mistakes: MistakeTypo},
 			},
@@ -224,8 +302,7 @@ func Test_PhraseFixer_Fix_Integration(t *testing.T) {
 			name:      "options are applied",
 			tokenizer: NewWhitespaceTokenizer(),
 			phrase:    "rang",
-			n:         5,
-			opts:      []OptionFunc{WithMaxErrors(1)},
+			opts:      []Option{WithMaxErrors(1)},
 			want: []segmentView{
 				{Text: "rang", Suggestions: []string{"range"}, Mistakes: MistakeTypo},
 			},
@@ -234,7 +311,6 @@ func Test_PhraseFixer_Fix_Integration(t *testing.T) {
 			name:      "unknown word",
 			tokenizer: NewWhitespaceTokenizer(),
 			phrase:    "qwerty",
-			n:         5,
 			want: []segmentView{
 				{Text: "qwerty", Mistakes: MistakeUnknownWord},
 			},
@@ -243,7 +319,6 @@ func Test_PhraseFixer_Fix_Integration(t *testing.T) {
 			name:      "correct, typo and unknown words together",
 			tokenizer: NewWhitespaceTokenizer(),
 			phrase:    "  blak   tea\tqwerty ",
-			n:         5,
 			want: []segmentView{
 				{Text: "blak", Suggestions: []string{"black"}, Mistakes: MistakeTypo},
 				{Text: "tea", Mistakes: NoMistake},
@@ -254,7 +329,6 @@ func Test_PhraseFixer_Fix_Integration(t *testing.T) {
 			name:      "standard tokenizer skips punctuation",
 			tokenizer: NewStandardTokenizer(),
 			phrase:    "green-tea, cofee!",
-			n:         5,
 			want: []segmentView{
 				{Text: "green", Mistakes: NoMistake},
 				{Text: "tea", Mistakes: NoMistake},
@@ -267,9 +341,9 @@ func Test_PhraseFixer_Fix_Integration(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			f := NewPhraseFixer(newSampleSpellchecker(t), tt.tokenizer, nil)
+			f := NewPhraseFixer(newSampleSpellchecker(t), tt.tokenizer)
 
-			got := f.Fix(tt.phrase, tt.n, tt.opts...)
+			got := f.Fix(tt.phrase, tt.opts...)
 			require.Equal(t, tt.want, segmentViews(t, tt.phrase, got))
 		})
 	}
@@ -280,8 +354,12 @@ type spellcheckerMock struct {
 	weights map[string]uint
 }
 
-func (m *spellcheckerMock) Suggest(word string, _ int, _ ...OptionFunc) SuggestionResult {
+func (m *spellcheckerMock) Suggest(word string, _ ...Option) SuggestionResult {
 	return m.results[word]
+}
+
+func (m *spellcheckerMock) IsCorrect(word string) bool {
+	return m.results[word].IsCorrect()
 }
 
 func (m *spellcheckerMock) AddWeight(weight uint, words ...string) {
@@ -294,17 +372,13 @@ func (m *spellcheckerMock) AddWeight(weight uint, words ...string) {
 	}
 }
 
-// segmentFixerMock returns segments as is for unknown phrases.
-type segmentFixerMock struct {
-	results map[string][]Segment
+// correctorMock appends its segments to the given ones.
+type correctorMock struct {
+	add []Segment
 }
 
-func (m *segmentFixerMock) Fix(phrase string, segments []Segment, _ int, _ ...OptionFunc) []Segment {
-	if result, ok := m.results[phrase]; ok {
-		return result
-	}
-
-	return segments
+func (m *correctorMock) Correct(_ CorrectInput, segments []Segment, _ ...Option) []Segment {
+	return append(segments, m.add...)
 }
 
 // segmentView is a Segment with its text and suggestion values instead of offsets and scores.
@@ -319,8 +393,10 @@ func segmentViews(t *testing.T, phrase string, result PhraseFixResult) []segment
 
 	views := make([]segmentView, 0, len(result.Segments))
 	for _, s := range result.Segments {
+		require.Equal(t, phrase[s.Start:s.End], s.Text)
+
 		v := segmentView{
-			Text:     phrase[s.Start:s.End],
+			Text:     s.Text,
 			Mistakes: s.Mistakes,
 		}
 		for _, suggestion := range s.Suggestions {

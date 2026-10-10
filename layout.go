@@ -1,6 +1,7 @@
 package spellchecker
 
 import (
+	"maps"
 	"strings"
 	"unicode/utf8"
 )
@@ -18,9 +19,13 @@ func (r LayoutReplacer) Replace(s string) string {
 	}, s)
 }
 
-// QwertyRuEn switches text between US QWERTY and Russian ЙЦУКЕН layouts.
+// QwertyRuEn returns a replacer that switches text between US QWERTY and Russian ЙЦУКЕН layouts.
 // Russian punctuation is not mapped, because it is on other keys than the same English characters.
-var QwertyRuEn = LayoutReplacer(map[rune]rune{
+func QwertyRuEn() LayoutReplacer {
+	return maps.Clone(qwertyRuEn)
+}
+
+var qwertyRuEn = LayoutReplacer{
 	// en to ru
 	'`': 'ё', 'q': 'й', 'w': 'ц', 'e': 'у', 'r': 'к', 't': 'е', 'y': 'н', 'u': 'г', 'i': 'ш', 'o': 'щ', 'p': 'з', '[': 'х', ']': 'ъ',
 	'a': 'ф', 's': 'ы', 'd': 'в', 'f': 'а', 'g': 'п', 'h': 'р', 'j': 'о', 'k': 'л', 'l': 'д', ';': 'ж', '\'': 'э',
@@ -36,39 +41,34 @@ var QwertyRuEn = LayoutReplacer(map[rune]rune{
 	'Ё': '~', 'Й': 'Q', 'Ц': 'W', 'У': 'E', 'К': 'R', 'Е': 'T', 'Н': 'Y', 'Г': 'U', 'Ш': 'I', 'Щ': 'O', 'З': 'P', 'Х': '{', 'Ъ': '}',
 	'Ф': 'A', 'Ы': 'S', 'В': 'D', 'А': 'F', 'П': 'G', 'Р': 'H', 'О': 'J', 'Л': 'K', 'Д': 'L', 'Ж': ':', 'Э': '"',
 	'Я': 'Z', 'Ч': 'X', 'С': 'C', 'М': 'V', 'И': 'B', 'Т': 'N', 'Ь': 'M', 'Б': '<', 'Ю': '>',
-})
+}
 
 type replacer interface {
 	Replace(s string) string
 }
 
-// LayoutFixer fixes words typed in a wrong keyboard layout.
-type LayoutFixer struct {
+// LayoutCorrector corrects words typed in a wrong keyboard layout.
+type LayoutCorrector struct {
 	replacer            replacer
-	suggester           suggester
-	tokenizer           Tokenizer
 	whitespaceTokenizer Tokenizer
 }
 
-// NewLayoutFixer creates a LayoutFixer. The replacer must map each rune to one rune.
-// The tokenizer must be the same as in PhraseFixer.
-func NewLayoutFixer(replacer replacer, suggester suggester, tokenizer Tokenizer) *LayoutFixer {
-	return &LayoutFixer{
+// NewLayoutCorrector creates a LayoutCorrector. The replacer must map each rune to one rune.
+func NewLayoutCorrector(replacer replacer) *LayoutCorrector {
+	return &LayoutCorrector{
 		replacer:            replacer,
-		suggester:           suggester,
-		tokenizer:           tokenizer,
 		whitespaceTokenizer: NewWhitespaceTokenizer(),
 	}
 }
 
-// Fix replaces segments typed in a wrong layout.
+// Correct replaces segments typed in a wrong layout.
 // The layout is switched for whole whitespace-separated chunks, because other separators
 // may be letters in another layout.
-func (f *LayoutFixer) Fix(phrase string, segments []Segment, maxSuggestions int, opts ...OptionFunc) []Segment {
+func (f *LayoutCorrector) Correct(in CorrectInput, segments []Segment, opts ...Option) []Segment {
 	result := make([]Segment, 0, len(segments))
 	i := 0
 
-	for _, chunk := range f.whitespaceTokenizer.Tokenize(phrase) {
+	for _, chunk := range f.whitespaceTokenizer.Tokenize(in.Phrase) {
 		first := i
 		mistakes := NoMistake
 		inside := true
@@ -79,7 +79,7 @@ func (f *LayoutFixer) Fix(phrase string, segments []Segment, maxSuggestions int,
 		}
 
 		if mistakes != NoMistake && inside {
-			if fixed := f.fixChunk(phrase, chunk.Start, chunk.End, mistakes, maxSuggestions, opts...); fixed != nil {
+			if fixed := f.correctChunk(in, chunk.Start, chunk.End, mistakes, opts...); fixed != nil {
 				result = append(result, fixed...)
 
 				continue
@@ -92,23 +92,22 @@ func (f *LayoutFixer) Fix(phrase string, segments []Segment, maxSuggestions int,
 	return append(result, segments[i:]...)
 }
 
-// fixChunk switches the layout of phrase[start:end] and returns its segments, or nil if it is not better.
+// correctChunk switches the layout of phrase[start:end] and returns its segments, or nil if it is not better.
 // mistakes are mistakes of the original segments of this text.
-func (f *LayoutFixer) fixChunk(
-	phrase string,
+func (f *LayoutCorrector) correctChunk(
+	in CorrectInput,
 	start, end int,
 	mistakes Mistake,
-	maxSuggestions int,
-	opts ...OptionFunc,
+	opts ...Option,
 ) []Segment {
-	text := phrase[start:end]
+	text := in.Phrase[start:end]
 
 	replaced := f.replacer.Replace(text)
 	if replaced == text {
 		return nil
 	}
 
-	tokens := f.tokenizer.Tokenize(replaced)
+	tokens := in.Tokenizer.Tokenize(replaced)
 	if len(tokens) == 0 || !toSourceOffsets(text, replaced, tokens) {
 		return nil
 	}
@@ -129,6 +128,7 @@ func (f *LayoutFixer) fixChunk(
 		}
 
 		result = append(result, Segment{
+			Text:        gap,
 			Start:       start + gapStart,
 			End:         start + gapEnd,
 			Suggestions: []Suggestion{{Value: replacedGap}},
@@ -140,7 +140,7 @@ func (f *LayoutFixer) fixChunk(
 	prevEnd := 0
 
 	for _, token := range tokens {
-		suggestions := f.suggester.Suggest(token.Text, maxSuggestions, opts...)
+		suggestions := in.Spellchecker.Suggest(token.Text, opts...)
 		if suggestions.Mistakes.Has(MistakeUnknownWord) {
 			return nil
 		}
@@ -149,13 +149,14 @@ func (f *LayoutFixer) fixChunk(
 		prevEnd = token.End
 
 		newSegment := Segment{
+			Text:        text[token.Start:token.End],
 			Start:       start + token.Start,
 			End:         start + token.End,
 			Suggestions: suggestions.Suggestions,
 			Mistakes:    suggestions.Mistakes | MistakeLayout,
 		}
 
-		if suggestions.Mistakes == NoMistake {
+		if suggestions.IsCorrect() {
 			newSegment.Suggestions = []Suggestion{{Value: token.Text}}
 		} else {
 			allCorrect = false

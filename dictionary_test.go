@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_New(t *testing.T) {
+func Test_NewDictionary(t *testing.T) {
 	t.Parallel()
 
 	t.Run("must reject an empty alphabet", func(t *testing.T) {
