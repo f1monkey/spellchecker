@@ -24,6 +24,14 @@ func Test_NewPhraseFixer(t *testing.T) {
 	require.Nil(t, NewPhraseFixer(sc, tok).correctors)
 }
 
+func Test_Segment_IsCorrect(t *testing.T) {
+	t.Parallel()
+
+	require.True(t, Segment{}.IsCorrect())
+	require.False(t, Segment{Mistakes: MistakeTypo}.IsCorrect())
+	require.False(t, Segment{Mistakes: MistakeLayout | MistakeExtraSpace}.IsCorrect())
+}
+
 func Test_PhraseFixer_Fix_Correctors(t *testing.T) {
 	t.Parallel()
 
@@ -295,6 +303,10 @@ type spellcheckerMock struct {
 
 func (m *spellcheckerMock) Suggest(word string, _ int, _ ...OptionFunc) SuggestionResult {
 	return m.results[word]
+}
+
+func (m *spellcheckerMock) IsCorrect(word string) bool {
+	return m.results[word].IsCorrect()
 }
 
 func (m *spellcheckerMock) AddWeight(weight uint, words ...string) {

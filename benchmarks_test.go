@@ -141,6 +141,97 @@ func benchmarkSegments(phrase string, results map[string]SuggestionResult) []Seg
 	return segments
 }
 
+func Benchmark_ExtraSpaceCorrector_Correct(b *testing.B) {
+	sc := newWordsMock("in", "to", "the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog", "he", "hello")
+
+	tests := []struct {
+		name   string
+		phrase string
+	}{
+		{name: "correct", phrase: "the quick brown fox"},
+		{name: "join_2", phrase: "hel lo"},
+		{name: "join_3", phrase: "he l lo"},
+		{name: "join_punctuation", phrase: "hel,lo"},
+		{name: "not_joined", phrase: "qw er"},
+		{name: "phrase", phrase: "the quick bro wn fox ju mps over the la zy dog"},
+	}
+
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			segments := benchmarkSuggestSegments(sc, tt.phrase)
+			c := NewExtraSpaceCorrector(sc, 3)
+
+			b.ReportAllocs()
+
+			for b.Loop() {
+				c.Correct(tt.phrase, segments, 5)
+			}
+		})
+	}
+}
+
+func Benchmark_ExtraSpaceCorrector_Correct_Full(b *testing.B) {
+	sc := loadFullSpellchecker(b)
+
+	tests := []struct {
+		name   string
+		phrase string
+	}{
+		{name: "correct", phrase: "the quick brown fox"},
+		{name: "join_2", phrase: "hap py"},
+		{name: "not_joined", phrase: "qw er"},
+		{name: "phrase", phrase: "the quick bro wn fox ju mps over the la zy dog"},
+	}
+
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			segments := benchmarkSuggestSegments(sc, tt.phrase)
+			c := NewExtraSpaceCorrector(sc, 3)
+
+			b.ReportAllocs()
+
+			for b.Loop() {
+				c.Correct(tt.phrase, segments, 5)
+			}
+		})
+	}
+}
+
+// wordsMock treats only the given words as correct.
+type wordsMock struct {
+	words map[string]struct{}
+}
+
+func newWordsMock(words ...string) *wordsMock {
+	m := &wordsMock{words: make(map[string]struct{}, len(words))}
+	for _, w := range words {
+		m.words[w] = struct{}{}
+	}
+
+	return m
+}
+
+func (m *wordsMock) Suggest(word string, _ int, _ ...OptionFunc) SuggestionResult {
+	if m.IsCorrect(word) {
+		return SuggestionResult{}
+	}
+
+	return SuggestionResult{Mistakes: MistakeUnknownWord}
+}
+
+func (m *wordsMock) IsCorrect(word string) bool {
+	_, ok := m.words[word]
+
+	return ok
+}
+
+func (m *wordsMock) AddWeight(uint, ...string) {}
+
+// benchmarkSuggestSegments returns segments of the phrase found by PhraseFixer without correctors.
+func benchmarkSuggestSegments(sc suggester, phrase string) []Segment {
+	return NewPhraseFixer(sc, NewStandardTokenizer()).Fix(phrase, 5).Segments
+}
+
 func Benchmark_Norvig1(b *testing.B) {
 	benchmarkNorvig(b, "data/norvig1.txt")
 }

@@ -155,7 +155,7 @@ func (f *LayoutCorrector) correctChunk(
 			Mistakes:    suggestions.Mistakes | MistakeLayout,
 		}
 
-		if suggestions.Mistakes == NoMistake {
+		if suggestions.IsCorrect() {
 			newSegment.Suggestions = []Suggestion{{Value: token.Text}}
 		} else {
 			allCorrect = false

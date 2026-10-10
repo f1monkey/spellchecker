@@ -16,6 +16,9 @@ type Segment struct {
 	Mistakes Mistake
 }
 
+// IsCorrect reports whether the segment has no mistakes.
+func (s Segment) IsCorrect() bool { return s.Mistakes == NoMistake }
+
 // PhraseFixResult is the result of PhraseFixer.Fix.
 type PhraseFixResult struct {
 	// Segments are in phrase order.

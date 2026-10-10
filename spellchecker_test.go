@@ -17,6 +17,14 @@ func Test_NewSpellchecker(t *testing.T) {
 	require.NotNil(t, s.dict)
 }
 
+func Test_SuggestionResult_IsCorrect(t *testing.T) {
+	t.Parallel()
+
+	require.True(t, SuggestionResult{}.IsCorrect())
+	require.False(t, SuggestionResult{Mistakes: MistakeTypo}.IsCorrect())
+	require.False(t, SuggestionResult{Mistakes: MistakeUnknownWord}.IsCorrect())
+}
+
 func Test_Spellchecker_IsCorrect(t *testing.T) {
 	t.Parallel()
 

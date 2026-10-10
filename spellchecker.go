@@ -22,6 +22,8 @@ const (
 	MistakeUnknownWord
 	// MistakeLayout is a word typed in a wrong keyboard layout.
 	MistakeLayout
+	// MistakeExtraSpace is a word split by extra spaces.
+	MistakeExtraSpace
 )
 
 // Has reports whether m contains any of the mistakes in x.
@@ -104,6 +106,9 @@ type SuggestionResult struct {
 	// Suggestions are fix candidates, best first.
 	Suggestions []Suggestion
 }
+
+// IsCorrect reports whether the word has no mistakes.
+func (r SuggestionResult) IsCorrect() bool { return r.Mistakes == NoMistake }
 
 // Suggest returns up to n fix suggestions for the word.
 func (s *Spellchecker) Suggest(word string, n int, opts ...OptionFunc) SuggestionResult {
